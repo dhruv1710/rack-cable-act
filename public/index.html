@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Plugging a cable into a patch panel</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,700;1,6..72,400&display=swap" rel="stylesheet">
+<style>
+:root{--ink:#222;--mute:#68758a;--link:#0b5cad;--line:#e4e6ea}
+*{box-sizing:border-box}
+html{background:#fff;scroll-behavior:smooth}
+body{margin:0;color:var(--ink);font:18px/1.65 Newsreader,Georgia,"Times New Roman",serif}
+.mono{font-family:"JetBrains Mono",ui-monospace,Menlo,monospace}
+.page{max-width:960px;margin:0 auto;padding:64px 24px 48px;display:grid;grid-template-columns:160px minmax(0,1fr);column-gap:68px}
+aside{font-family:"JetBrains Mono",ui-monospace,Menlo,monospace;font-size:14px;line-height:1.5;position:sticky;top:64px;align-self:start}
+aside .name{font-weight:700;display:block;margin-bottom:26px;color:var(--ink);text-decoration:none}
+aside a{display:block;color:var(--mute);text-decoration:none;margin-bottom:8px}
+aside a:hover{color:var(--ink)}
+aside a.on{color:var(--ink)}aside a.on:before{content:"> ";color:var(--mute)}
+aside .label{font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;margin:28px 0 10px}
+h1{font:400 26px/1.2 "JetBrains Mono",ui-monospace,Menlo,monospace;margin:30px 0 28px}
+h1 i{color:#8a99b3;font-style:normal;animation:b 1.1s steps(1) infinite}
+@keyframes b{50%{opacity:0}}
+h2{font:700 22px/1.3 Newsreader,Georgia,serif;margin:52px 0 12px}
+p{margin:0 0 18px}
+a{color:var(--link)}
+ul{padding-left:22px;margin:0 0 18px}li{margin-bottom:8px}
+figure{margin:24px 0}
+video,img{display:block;width:100%;border-radius:4px;background:#000}
+figcaption{font-size:15px;color:var(--mute);margin-top:6px}
+table{border-collapse:collapse;width:100%;margin:8px 0 18px;font-size:17px}
+th,td{text-align:left;padding:8px 14px 8px 0;border-bottom:1px solid var(--line);vertical-align:top}
+th{font:700 12px "JetBrains Mono",ui-monospace,monospace;letter-spacing:.08em;text-transform:uppercase;color:var(--mute)}
+td.n{font-family:"JetBrains Mono",ui-monospace,monospace;font-size:15px;white-space:nowrap}
+code{font-family:"JetBrains Mono",ui-monospace,monospace;font-size:.82em;background:#f2f3f5;padding:1px 5px;border-radius:3px}
+pre{font:14px/1.5 "JetBrains Mono",ui-monospace,monospace;background:#f2f3f5;padding:14px 16px;border-radius:4px;overflow-x:auto;margin:0 0 18px}
+hr{border:0;border-top:1px solid var(--line);margin:56px 0 20px}
+footer{color:var(--mute);font-size:16px}
+.small{font-size:15px;color:var(--mute)}
+@media (max-width:760px){
+ .page{display:block;padding:32px 16px}
+ aside{position:static;margin-bottom:8px}
+ aside a{display:inline-block;margin-right:14px}
+ aside .label{display:none}
+ aside .name{margin-bottom:12px}
+}
+</style>
+</head>
+<body>
+<div class="page">
+
+<aside>
+  <a class="name" href="#top">Dhruv Tiwari</a>
+  <a class="on" href="#top">Summary</a>
+  <a href="#demo">Demo</a>
+  <a href="#results">Results</a>
+  <a href="#how">How it was built</a>
+  <a href="#good">What worked</a>
+  <a href="#limits">Limits</a>
+  <a href="#next">Next</a>
+  <div class="label">Files</div>
+  <a href="README.md">README</a>
+</aside>
+
+<main id="top">
+<h1>Plugging a cable into a patch panel<i>_</i></h1>
+
+<p>This is a robot policy that picks up a cable plug with a simulated Franka arm and inserts it into a server-rack patch-panel port. It sees two cameras and outputs joint targets. Nothing else is given to it, no port coordinates and no object poses.</p>
+
+<p>On 20 unseen test runs it succeeded 20 times. The same trained weights succeeded only 4 times out of 20 before one change at inference time, which is the interesting part of this project. Everything here is in simulation. None of it has touched a real arm.</p>
+
+<h2 id="demo">Demo</h2>
+<figure>
+  <video controls loop muted playsinline preload="metadata" src="rack_cable/videos/temporal_ensembling_success.mp4"></video>
+  <figcaption>A successful insertion. Left: overview camera. Right: wrist camera. About 17 seconds, tip within 2.5 mm of the port.</figcaption>
+</figure>
+<figure>
+  <video controls loop muted playsinline preload="metadata" src="rack_cable/videos/default_chunking_failure.mp4"></video>
+  <figcaption>The same weights with the default settings. It grasps fine and then fails to seat the plug.</figcaption>
+</figure>
+<figure>
+  <video controls loop muted playsinline preload="metadata" src="rack_cable/videos/temporal_ensembling_wider_start_range.mp4"></video>
+  <figcaption>Success with the cable placed in a range 25% wider than anything in training.</figcaption>
+</figure>
+
+<h2 id="results">Results</h2>
+<p>One checkpoint, tested on seeds it never saw in training.</p>
+<table>
+  <tr><th>Setup</th><th>Success</th></tr>
+  <tr><td>Default ACT, 50 actions per prediction</td><td class="n">4 / 20</td></tr>
+  <tr><td>Re-plan every 10, 25 or 100 steps</td><td class="n">0 / 8 each</td></tr>
+  <tr><td>Temporal ensembling</td><td class="n">20 / 20</td></tr>
+  <tr><td>Temporal ensembling, all runs combined</td><td class="n">52 / 52</td></tr>
+  <tr><td>Temporal ensembling, 1.25x wider cable start range</td><td class="n">10 / 10</td></tr>
+</table>
+<p class="small">52 of 52 only supports a reliability of roughly 93% or better at 95% confidence. It does not show 100%.</p>
+
+<h2 id="how">How it was built</h2>
+<p>The scene is MuJoCo: a Franka Panda, a cable made of chained segments with a plug on the end, and a patch panel. The port has a latch that engages once the plug is within 2 mm sideways and 2.5 mm of fully seated. That latch is what counts as success.</p>
+<p>A scripted expert grasps and inserts the plug. I generated 50 successful demonstrations from it with random cable positions, which came to 54,879 frames at 50 Hz. The policy is ACT from LeRobot, trained for 17,500 steps at batch size 8 on a single Modal L4. Total GPU spend was $0.995.</p>
+<p>Two data bugs cost the most time. The video encoder silently dropped frames when its queue filled, so the video came out shorter than the data. And the expert paused for about ten seconds at one pose, which the policy could not learn to leave. Fixing both mattered more than any model setting.</p>
+<p>After that the policy grasped reliably but missed the final insertion. Re-planning more often did not help. Temporal ensembling did: instead of running a block of 50 actions open loop, it queries the model every step and averages the overlapping predictions. No retraining was needed.</p>
+
+<h2 id="good">What worked</h2>
+<ul>
+  <li>Fifty demonstrations were enough for a vision-only policy to insert reliably in simulation.</li>
+  <li>The fix cost nothing at training time. It is a few lines in the evaluation code.</li>
+  <li>The whole pipeline, from data to a trained and tested policy, fit inside a $1 budget.</li>
+  <li>Scripted data is cheap and every demonstration is verified to succeed.</li>
+</ul>
+
+<h2 id="limits">Limits</h2>
+<ul>
+  <li><b>Simulation only.</b> Sim-to-real is the main open risk and is untested.</li>
+  <li><b>Narrow testing.</b> I only widened the cable start range by 25%. Camera position, lighting, color and physics changes are not tested.</li>
+  <li><b>The success check is a simulated latch.</b> It is not a measured connector click.</li>
+  <li><b>Sample size.</b> 52 trials is evidence, not a guarantee.</li>
+  <li><b>Margin.</b> Insertion lands within about 2.5 mm, against a 2 mm and 2.5 mm tolerance.</li>
+  <li><b>Cost at run time.</b> Temporal ensembling runs the network every step and reacts a little slower than open-loop chunks.</li>
+  <li><b>Scripted demos are cleaner than human ones.</b> Real teleoperated data will be noisier.</li>
+  <li><b>One task.</b> One port, one fixed camera pose.</li>
+</ul>
+
+<h2 id="next">Next</h2>
+<ul>
+  <li>Move the camera, change lighting and physics, and find where it breaks.</li>
+  <li>Run 60 or more seeds for a tighter bound.</li>
+  <li>Collect real or teleoperated demonstrations and co-train with these.</li>
+  <li>Try a generalist model such as π0.5 across several ports and tasks.</li>
+</ul>
+
+<h2>Run it</h2>
+<pre>python models/act/eval_act.py \
+  --checkpoint public/rack_cable/model \
+  --temporal-ensemble 0.01 --episodes 10</pre>
+
+<hr>
+<footer>© 2026 Dhruv Tiwari</footer>
+</main>
+
+</div>
+</body>
+</html>

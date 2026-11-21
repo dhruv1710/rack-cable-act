@@ -1,0 +1,37 @@
+<mujoco model="rack_cable_scene">
+  <option timestep="0.002" integrator="implicitfast" cone="elliptic" impratio="10"/>
+  <visual>
+    <global offwidth="640" offheight="480"/>
+    <headlight ambient="0.4 0.4 0.4" diffuse="0.6 0.6 0.6" specular="0 0 0"/>
+  </visual>
+
+  <asset>
+    <texture type="skybox" builtin="gradient" rgb1="0.6 0.75 0.9" rgb2="0 0 0" width="512" height="512"/>
+    <texture name="grid" type="2d" builtin="checker" rgb1="0.25 0.27 0.3" rgb2="0.3 0.32 0.35" width="300" height="300"/>
+    <material name="grid" texture="grid" texrepeat="6 6" reflectance="0.1"/>
+    <material name="steel" rgba="0.55 0.57 0.6 1"/>
+    <material name="panel" rgba="0.12 0.13 0.15 1"/>
+    <material name="socket" rgba="0.8 0.65 0.1 1"/>
+    <material name="wood" rgba="0.6 0.45 0.3 1"/>
+    <material name="plug" rgba="0.1 0.3 0.8 1"/>
+  </asset>
+
+  <worldbody>
+    <light pos="0.3 -0.5 1.8" dir="0 0.2 -1" diffuse="0.8 0.8 0.8"/>
+    <geom name="floor" type="plane" size="3 3 0.05" material="grid" conaffinity="3"/>
+
+    <!-- low table the cable starts on -->
+    <geom name="table" type="box" pos="0.45 0 0.15" size="0.15 0.3 0.15" material="wood" conaffinity="3"/>
+
+    <!-- server rack: 4 posts + patch panel with 4 ports -->
+    <body name="rack" pos="0 0 0">
+      <geom name="post_fl" type="box" pos="0.62 -0.30 0.5" size="0.012 0.012 0.5" material="steel" contype="0" conaffinity="0"/>
+      <geom name="post_fr" type="box" pos="0.62  0.30 0.5" size="0.012 0.012 0.5" material="steel" contype="0" conaffinity="0"/>
+      <geom name="post_bl" type="box" pos="0.80 -0.30 0.5" size="0.012 0.012 0.5" material="steel" contype="0" conaffinity="0"/>
+      <geom name="post_br" type="box" pos="0.80  0.30 0.5" size="0.012 0.012 0.5" material="steel" contype="0" conaffinity="0"/>
+      <!-- patch panel plate; front face (toward robot) at x=0.675 -->
+      <geom name="panel" type="box" pos="0.68 0 0.55" size="0.005 0.29 0.045" material="panel" conaffinity="3"/>
+      <!-- ports are added in Python (4 sockets) -->
+    </body>
+</worldbody>
+</mujoco>

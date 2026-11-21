@@ -1,0 +1,15 @@
+.env
+keys/
+*.pem
+.venv/
+node_modules/
+.gstack/
+out/
+third_party/
+papers/
+package.json
+package-lock.json
+__pycache__/
+*.pyc
+public/rack_cable/model/model.safetensors
+public/rack_cable/model/model.safetensors
