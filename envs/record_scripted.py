@@ -15,9 +15,12 @@ import time
 from pathlib import Path
 
 import imageio.v2 as imageio
+import numpy as np
+from PIL import Image
 
 import envs
 
+from .experts import bottle_binning, parts_sorting, thermal_patrol
 from .tests.handoff_test import handoff
 from .tests.pick_place import solve_relative_placement
 from .tests.pour_test import pour
@@ -30,7 +33,19 @@ POLICIES = {
     "relative_placement": lambda env: solve_relative_placement(env)[1],
     "object_handoff": lambda env: handoff(env, verbose=False)[0],
     "pouring_beads": lambda env: pour(env, verbose=False),
+    "parts_sorting": parts_sorting,
+    "bottle_binning": bottle_binning,
+    "thermal_patrol": thermal_patrol,
 }
+
+
+def frame_of(task: str, obs: dict) -> np.ndarray:
+    """Video frame: the overview camera, plus the thermal image beside it for the patrol task."""
+    img = obs["observation.images.overview"]
+    if task == "thermal_patrol":
+        th = Image.fromarray(obs["observation.images.thermal"]).resize((img.shape[0] * 4 // 3, img.shape[0]))
+        img = np.concatenate([img, np.asarray(th)], axis=1)
+    return img
 
 
 def run(task: str, n: int, record_all: bool = False) -> dict:
@@ -46,7 +61,7 @@ def run(task: str, n: int, record_all: bool = False) -> dict:
             out = _step(a)
             _c[0] += 1
             if _c[0] % STRIDE == 0:
-                _f.append(out[0]["observation.images.overview"])
+                _f.append(frame_of(task, out[0]))
             return out
 
         env.step = wrapped

@@ -98,21 +98,26 @@ figure.g figcaption{font-size:14px;line-height:1.4}
 </div>
 <p class="small">Action is the vector length per step. Steps/s is with rendering on the dev laptop (50 is real time).</p>
 <h2 id="scripted">Scripted policies</h2>
-<p>Reference solutions that read object poses from the simulator and use inverse kinematics. They show a task is solvable and are the source for demonstration data. Videos are at 2x speed.</p>
+<p>Reference solutions for 7 of the 11 tasks. They use inverse kinematics and privileged simulator state, except the patrol, which works from the thermal image only. They show a task is solvable and are the source for demonstration data. Videos are at 2x speed.</p>
 <div class="grid">
 <figure class="g"><video controls loop muted playsinline preload="metadata" src="video/scripted_cable_insertion.mp4"></video><figcaption>Cable insertion. Plug latched in the port.</figcaption></figure>
+<figure class="g"><video controls loop muted playsinline preload="metadata" src="video/scripted_parts_sorting.mp4"></video><figcaption>Parts sorting. Nine parts into the compartments that match the labels.</figcaption></figure>
+<figure class="g"><video controls loop muted playsinline preload="metadata" src="video/scripted_bottle_binning.mp4"></video><figcaption>Bottle binning. Four bottles from the conveyor into the crate.</figcaption></figure>
 <figure class="g"><video controls loop muted playsinline preload="metadata" src="video/scripted_pouring_beads.mp4"></video><figcaption>Pouring beads. 100 of 100 beads in the bowl, cup returned.</figcaption></figure>
 <figure class="g"><video controls loop muted playsinline preload="metadata" src="video/scripted_relative_placement.mp4"></video><figcaption>Relative placement. Toy block placed on the commanded object.</figcaption></figure>
 <figure class="g"><video controls loop muted playsinline preload="metadata" src="video/scripted_object_handoff.mp4"></video><figcaption>Handoff. Left arm to right arm, bar set on the pad.</figcaption></figure>
+<figure class="g" style="grid-column:1/-1"><video controls loop muted playsinline preload="metadata" src="video/scripted_thermal_patrol.mp4"></video><figcaption>Thermal patrol. Overview camera and thermal camera. Every hot server flagged.</figcaption></figure>
 </div>
 <table>
   <tr><th>Task</th><th>Seeds solved</th><th>Note</th></tr>
   <tr><td>Cable insertion</td><td class="n">10 / 10</td><td>Random cable start</td></tr>
-  <tr><td>Pouring beads</td><td class="n">4 / 8</td><td>Cup returned and released</td></tr>
+  <tr><td>Thermal patrol</td><td class="n">6 / 6</td><td>Thermal image only. Success allows at most 1 false flag</td></tr>
+  <tr><td>Parts sorting</td><td class="n">8 / 12</td><td>Misses are one part, usually a small cylinder</td></tr>
+  <tr><td>Bottle binning</td><td class="n">8 / 12</td><td>Misses are one bottle short</td></tr>
   <tr><td>Relative placement</td><td class="n">6 / 8</td><td>Failures: path bumps a distractor</td></tr>
+  <tr><td>Pouring beads</td><td class="n">4 / 8</td><td>Failures not diagnosed</td></tr>
   <tr><td>Handoff</td><td class="n">1 / 8</td><td>Tuned on seed 0 only. The random bar yaw breaks the right-hand grasp</td></tr>
-  <tr><td>Bottle binning</td><td class="n">3 / 8</td><td>Partial. Not shown</td></tr>
-  <tr><td>Cable routing, fuse holder, parts sorting, plate racking, drive replacement, thermal patrol</td><td class="n">none</td><td>No scripted policy yet</td></tr>
+  <tr><td>Cable routing, fuse holder, plate racking, drive replacement</td><td class="n">none</td><td>No working scripted policy yet. A plate racking attempt fails where the arm crosses the zone straight ahead of the base</td></tr>
 </table>
 
 <h2 id="interface">Interface</h2>
@@ -200,7 +205,7 @@ obs, r, terminated, truncated, info = env.step(env.noop_action())</pre>
 <ul>
   <li>Simulation only.</li>
   <li>Rendering is not photoreal. Cables and beads are rigid.</li>
-  <li>Scripted policies cover 4 of 11 tasks reliably or partly (table above). They are not datasets yet.</li>
+  <li>Scripted policies cover 7 of 11 tasks, 5 of them on at least two thirds of seeds (table above). They are not datasets yet.</li>
   <li>Baseline has 3 episodes per task.</li>
 </ul>
 

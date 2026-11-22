@@ -171,15 +171,33 @@ and writes an mp4 per successful episode to `out/scripted/`.
 | task | seeds solved | note |
 |---|---|---|
 | cable_insertion | 10 / 10 | random cable start (`scripted_insert.py --randomize`) |
-| pouring_beads | 4 / 8 | failures not diagnosed |
+| thermal_patrol | 6 / 6 | perception-guided: uses the thermal image only, no hot-server list |
+| parts_sorting | 8 / 12 | `experts.parts_sorting`; misses are single parts |
+| bottle_binning | 8 / 12 | `experts.bottle_binning`; misses are one bottle short |
 | relative_placement | 6 / 8 | failures: joint-space path bumps a distractor |
+| pouring_beads | 4 / 8 | failures not diagnosed |
 | object_handoff | 1 / 8 | tuned on seed 0. The random bar yaw leaves the bar rotated at the handoff point, and a lower right-hand grasp cannot reach the pad height with a horizontal hand (needs >= 12 cm) |
-| bottle_binning | 3 / 8 | `experts.bottle_binning`, partial |
-| others | none | cable_routing, fuse_holder, parts_sorting, plate_racking, drive_replacement, thermal_patrol |
+| others | none | cable_routing, fuse_holder, plate_racking, drive_replacement |
 
-Findings from writing them: the Panda hand is symmetric under a 180 degree turn, so pick the yaw whose IK converges
-(`experts.reachable_R`) and skip a pick rather than execute an unsolved IK result; the arm lags its target, so hold
-0.5 s at the pre-grasp pose before a tight approach.
+Findings from writing them:
+
+- The Panda hand is symmetric under a 180 degree turn, so pick the yaw whose IK converges (`experts.reachable_R`) and
+  skip a pick rather than execute an unsolved IK result. The `ok` flag of `solve_ik` is conservative: the arm often
+  tracks a target that it reports as not converged.
+- The arm lags its target, so hold 0.5 s at the pre-grasp pose before a tight approach.
+- Light or small parts (28 g bottles, 12 mm cylinders) are squirted out by an instant close. `gentle_grasp` closes over
+  about 1.2 s.
+- A lying cylinder rolls away from the first finger when gripped across its axis. Grip its flat end faces (along the
+  axis) instead.
+- The open fingers span about 8 cm: choose the grip yaw whose closing axis has no neighbour within about 6 cm, and defer
+  a part that is blocked on every yaw (`experts._blockers`).
+- A servo that centres on a hot server's blob must use the camera's offset from the base origin (8 cm on the patrol
+  robot) and the whole blob's bounding-box middle. A brightness-weighted centroid is pulled off by the neighbours that
+  pick up some heat.
+- Plate racking (attempted, not working): with the hand horizontal, the Panda has a band of about |y| < 0.07 m directly
+  in front of the base where this wrist orientation has no IK solution from the usual seeds, and the carry to the far
+  slots crosses it. The plate drops as the arm crosses. The carry needs a different wrist orientation or a path around
+  the band.
 
 ### Bottle binning layout fix
 
