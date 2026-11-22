@@ -1,0 +1,18 @@
+line-length = 120
+target-version = "py312"
+
+[lint]
+select = ["E", "F", "W", "I", "B", "UP", "C4", "SIM", "RUF"]
+ignore = [
+    "E741",    # ambiguous names (l, O) are conventional in geometry code
+    "E731",    # lambdas in tests
+    "RUF005",  # collection concatenation reads better with numpy arrays
+    "RUF012",  # class-level mutable defaults on env classes are intentional constants
+    "SIM108",
+    "B905",    # zip() without strict
+]
+
+[lint.per-file-ignores]
+"common/world.py" = ["E501"]   # embedded XML template
+"view.py" = ["E402"]           # sys.path must be fixed before the imports
+"tasks/cable_insertion.py" = ["E402"]

@@ -36,11 +36,14 @@ class RackCableEnv(gym.Env):
     metadata = {"render_modes": ["rgb_array"], "render_fps": FPS}
 
     def __init__(self, port: int = 2, img_hw=(192, 256), randomize: bool = True,
-                 render: bool = True, max_seconds: float = 45.0, rand_scale: float = 1.0):
+                 render: bool = True, max_seconds: float = 45.0, rand_scale: float = 1.0, spec_hook=None):
         self.port, self.randomize, self.max_seconds = port, randomize, max_seconds
         self.rand_scale = rand_scale    # 1.0 = training distribution; >1 widens the cable start pose range
         self.img_hw = tuple(img_hw)
-        self.m, _ = bs.build_model()
+        spec = bs.build_spec()
+        if spec_hook is not None:          # visual-only additions (see envs/tasks/cable_insertion.py)
+            spec_hook(spec)
+        self.m = spec.compile()
         self.d = mujoco.MjData(self.m)
         m = self.m
         self.arm_qadr = [m.jnt_qposadr[m.joint(f"panda_joint{i}").id] for i in range(1, 8)]
