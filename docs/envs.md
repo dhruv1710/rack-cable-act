@@ -179,7 +179,8 @@ and writes an mp4 per successful episode to `out/scripted/`.
 | relative_placement | 8 / 12 | `tests/pick_place.py`; misses are mostly the bowl and the tall box. A rewrite on planned paths scored 6 / 12 and was dropped |
 | pouring_beads | 5 / 8 | `experts.pouring_beads`; beads always reach the bowl, the misses are the cup return |
 | fuse_holder | 12 / 12 | `experts.fuse_holder`; holder pitch widened to 50 mm, lid stop at 83 degrees |
-| others | none | cable_routing (attempted, see below), drive_replacement |
+| drive_replacement | 0 / 6 | partial, see below |
+| others | none | cable_routing (attempted, see below) |
 
 Findings from writing them:
 
@@ -251,3 +252,20 @@ Environment changes: the hinged lids had no latch and tipped open by themselves 
 now has a closed-position detent (weld latch that releases at about 0.4 N at the tab and re-latches when pushed shut after
 being opened), a light hinge, and a stop at 83 degrees. The holders are 50 mm apart (were 34 mm): the Panda hand body
 is 6 cm wide and caught the neighbours. The pi0.5 baseline ran before these changes.
+
+Drive replacement, partial (`experts.drive_press_button`, `drive_pull_out`, `drive_pick_spare`; 6 seeds): the release button is
+pressed and the lever unlocks 6 / 6, the drive is pulled clear by its lever 6 / 6 (neighbours stay latched 6 / 6), and the
+spare is picked up from its stand 5 / 6. Inserting the spare is not solved (`drive_insert_spare` does not work).
+
+- The hand must roll so the pads close sideways when pressing or pulling: with the pads closing vertically the hand's 20 cm
+  palm is vertical and catches the shelf in front of the chassis.
+- The button needs 4 mm and is 1 cm wide; a pressing fingertip stalls at about 1.5 mm for most aim points, so the press
+  retries with different aim points until the lever unlocks.
+- The planner treats a hand pose and the same pose turned 180 degrees about the approach axis as equivalent. That is wrong
+  for a held object: it can turn the drive upside down. Carrying needs `allow_flip=False`.
+- Why the insertion fails: a drive held by two pads rotates about the pad contact as soon as the hand rolls, so the carry
+  needs one fixed hand orientation along a continuous joint path. The planner finds none from the stand to the bays. A
+  joint-space jump tilts the hand and the drive slips out of the pads (its yaw also drifts when gripped by the front edge).
+  Even with a good carry the drive's 1.5 mm vertical clearance is thinner than the pads, so the last 2.4 cm needs a second
+  tool (a fingertip push), then the lever has to be swung shut to latch it. Moving the spare stand in front of the bays
+  would probably remove the carry problem.
