@@ -175,7 +175,7 @@ and writes an mp4 per successful episode to `out/scripted/`.
 | plate_racking | 10 / 10 | slots 2 to 4 came up in these seeds |
 | object_handoff | 10 / 10 | 20 cm bar; `experts.object_handoff` |
 | parts_sorting | 8 / 12 | misses are single parts |
-| bottle_binning | 8 / 12 | misses are one bottle short |
+| bottle_binning | 10 / 12 | both misses lose one bottle to the floor (seeds 3, 4) |
 | relative_placement | 8 / 12 | `tests/pick_place.py`; misses are mostly the bowl and the tall box. A rewrite on planned paths scored 6 / 12 and was dropped |
 | pouring_beads | 21 / 24 | `experts.pouring_beads`; beads always reach the bowl, the 3 misses are the cup tipping over on the return descent |
 | fuse_holder | 12 / 12 | `experts.fuse_holder`; holder pitch widened to 50 mm, lid stop at 83 degrees |
@@ -280,3 +280,8 @@ columns 0 to 2; allowing a joint jump did not help), and seed 1 failed at the sp
 Pouring fix: the cup swung in the grip after the pour and tipped over during the descent back to the table (it slid into the
 robot base). Settling for 0.6 s, planning the return without wrist flips and descending in 16 waypoints over 3 s raised the
 scripted pour from 5 / 8 to 21 / 24 (seeds 0 to 23). Beads reached the bowl 24 / 24.
+
+Bottle binning fixes (8 / 12 to 10 / 12): a lying bottle's body origin is at its base end, so the grasp is now half a body
+length along its axis (before, the pads closed on the bottle's end and squeezed it out on the lift). A 19.5 cm lying bottle
+dropped into the 2 x 2 slots landed across its neighbours, so lying bottles now get their own lane along the crate's long
+axis and the standing bottles use the other lane. The two remaining misses (seeds 3, 4) each knock one bottle off the belt.

@@ -36,6 +36,17 @@ def reachable_R(env, drv, positions, yaw, extra=()):
     return None
 
 
+def _crate_slot(n_lying, k, lying):
+    """Crate position (relative to its centre) for the k-th lying / standing bottle. A lying bottle is 19.5 cm long, so
+    it gets a lane along the crate's long axis and the standing bottles use the other lane."""
+    if n_lying == 0:
+        return CRATE_SLOTS[k % len(CRATE_SLOTS)]
+    if lying:
+        return (0.0, -0.065 if n_lying == 1 or k == 0 else 0.065)
+    lane = [(-0.10, 0.05), (0.0, 0.05), (0.10, 0.05)] if n_lying == 1 else [(-0.07, 0.0), (0.07, 0.0)]
+    return lane[k % len(lane)]
+
+
 COMP_HALF = 0.05  # half-width of a compartment's landing zone
 CRATE_SLOTS = [(-0.07, -0.05), (0.07, -0.05), (-0.07, 0.05), (0.07, 0.05)]
 
@@ -58,6 +69,8 @@ def bottle_binning(env, verbose=False, tries_per_bottle=2):
     drv = Driver(env)
     tries = dict.fromkeys(env.bid, 0)
     done = 0
+    placed = {True: 0, False: 0}  # bottles already in the crate, lying / standing
+    n_lying = sum(abs(d.xmat[b].reshape(3, 3)[2, 2]) <= 0.9 for b in env.bid if _on_belt(env, b))
     for _ in range(3 * len(env.bid)):
         left = [b for b in env.bid if _on_belt(env, b) and tries[b] < tries_per_bottle]
         if not left:
@@ -73,7 +86,8 @@ def bottle_binning(env, verbose=False, tries_per_bottle=2):
             yaw = float(np.arctan2(ax[1], ax[0]))
             mid = p + ax * (H_BODY / 2)  # the body origin is at the base end of the bottle
             pre, grasp = mid + np.array([0, 0, 0.12]), mid.copy()
-        sx, sy = CRATE_SLOTS[done % len(CRATE_SLOTS)]
+        lying = up <= 0.9
+        sx, sy = _crate_slot(n_lying, placed[lying], lying)
         tx, ty = CRATE_C[0] + sx, CRATE_C[1] + sy
         R = reachable_R(env, drv, [pre, grasp, np.array([tx, ty, 0.40])], yaw)
         if R is None:
@@ -92,6 +106,7 @@ def bottle_binning(env, verbose=False, tries_per_bottle=2):
         drv.move_linear(np.array([tx, ty, 0.42]), R, 0.8)
         if env._in_crate(d.xpos[b]):
             done += 1
+            placed[lying] += 1
         elif verbose:
             print(f"  bottle at {np.round(p, 2)} not in the crate after the pick")
     drv.hold(2.0)
