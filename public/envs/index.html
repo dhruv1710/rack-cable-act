@@ -80,52 +80,49 @@ figure.g figcaption{font-size:14px;line-height:1.4}
 </ul>
 
 <h2 id="tasks">Tasks</h2>
+<p>Every task has a scripted reference solution. Scripted success is over the seeds tested; 6 of 11 succeed on all of them.</p>
 <div style="overflow-x:auto">
 <table>
-  <tr><th>Task</th><th>Robot</th><th>Action</th><th>Cameras</th><th>Limit (s)</th><th>Steps/s</th><th>Success</th></tr>
-  <tr><td>Cable insertion</td><td>1 Panda</td><td class="n">8</td><td>overview, wrist</td><td class="n">45</td><td class="n">44</td><td>Plug latched in a patch-panel port</td></tr>
-  <tr><td>Cable routing</td><td>1 Panda</td><td class="n">8</td><td>overview, wrist</td><td class="n">90</td><td class="n">43</td><td>Cable through all 3 clips, plug beyond the last</td></tr>
-  <tr><td>Fuse holder</td><td>1 Panda</td><td class="n">8</td><td>overview, wrist</td><td class="n">120</td><td class="n">57</td><td>New fuse latched in target holder, lid closed, old fuse out, others untouched</td></tr>
-  <tr><td>Parts sorting</td><td>1 Panda</td><td class="n">8</td><td>overview, wrist</td><td class="n">180</td><td class="n">69</td><td>Every part in the compartment whose label matches</td></tr>
-  <tr><td>Handoff</td><td>2 Pandas</td><td class="n">16</td><td>overview, wrist x2</td><td class="n">90</td><td class="n">29</td><td>Both grippers hold, giver releases, bar rests on pad</td></tr>
-  <tr><td>Bottle binning</td><td>1 Panda</td><td class="n">8</td><td>overview, wrist</td><td class="n">120</td><td class="n">59</td><td>All 4 bottles inside the crate</td></tr>
-  <tr><td>Plate racking</td><td>1 Panda</td><td class="n">8</td><td>overview, wrist</td><td class="n">120</td><td class="n">48</td><td>Plate upright in the commanded slot, supported, at rest</td></tr>
-  <tr><td>Pouring beads</td><td>1 Panda</td><td class="n">8</td><td>overview, wrist</td><td class="n">90</td><td class="n">12</td><td>85% or more of 100 beads in bowl, 8% or less on table, cup upright and released</td></tr>
-  <tr><td>Relative placement</td><td>1 Panda</td><td class="n">8</td><td>overview, wrist</td><td class="n">60</td><td class="n">71</td><td>Commanded spatial relation holds and object at rest</td></tr>
-  <tr><td>Thermal patrol</td><td>Mobile base, pan/tilt head</td><td class="n">5</td><td>overview, head RGB, thermal</td><td class="n">150</td><td class="n">28</td><td>All hot servers flagged, at most 1 false flag</td></tr>
-  <tr><td>Drive replacement</td><td>1 Panda</td><td class="n">8</td><td>overview, wrist</td><td class="n">150</td><td class="n">57</td><td>Spare latched in failed bay, lever closed, failed drive out, others untouched</td></tr>
+  <tr><th>Task</th><th>Robot</th><th>Success when</th><th>Scripted</th></tr>
+  <tr><td>Cable insertion</td><td>1 Panda</td><td>Plug latched in a patch-panel port</td><td class="n">10 / 10</td></tr>
+  <tr><td>Cable routing</td><td>1 Panda</td><td>Cable through all 3 clips, plug beyond the last</td><td class="n">8 / 8</td></tr>
+  <tr><td>Fuse holder</td><td>1 Panda</td><td>New fuse latched, lid closed, old fuse out, others untouched</td><td class="n">12 / 12</td></tr>
+  <tr><td>Drive replacement</td><td>1 Panda</td><td>Spare latched in the failed bay, lever closed, failed drive out</td><td class="n">3 / 9</td></tr>
+  <tr><td>Parts sorting</td><td>1 Panda</td><td>Every part in the compartment whose label matches</td><td class="n">16 / 24</td></tr>
+  <tr><td>Bottle binning</td><td>1 Panda</td><td>All 4 bottles inside the crate</td><td class="n">10 / 12</td></tr>
+  <tr><td>Pouring beads</td><td>1 Panda</td><td>At least 85 of 100 beads in the bowl, at most 8 on the table, cup upright and released</td><td class="n">21 / 24</td></tr>
+  <tr><td>Relative placement</td><td>1 Panda</td><td>Commanded spatial relation holds, object at rest</td><td class="n">16 / 24</td></tr>
+  <tr><td>Plate racking</td><td>1 Panda</td><td>Plate upright in the commanded slot, supported, at rest</td><td class="n">10 / 10</td></tr>
+  <tr><td>Handoff</td><td>2 Pandas</td><td>Both grippers hold, giver releases, bar rests on the pad</td><td class="n">10 / 10</td></tr>
+  <tr><td>Thermal patrol</td><td>Mobile base, pan/tilt head</td><td>All hot servers flagged, at most 1 false flag</td><td class="n">6 / 6</td></tr>
 </table>
 </div>
-<p class="small">Action is the vector length per step. Steps/s is with rendering on the dev laptop (50 is real time).</p>
+<p class="small">Action: 8 per arm (7 joint targets and a gripper), 16 for the two-arm task, 5 for the patrol. Cameras: overview and wrist (patrol: overview, head RGB, thermal). Time limits 45 to 180 s. Control at 50 Hz.</p>
+
 <h2 id="scripted">Scripted policies</h2>
-<p>Reference solutions for all 11 tasks. They use inverse kinematics and privileged simulator state, except the patrol, which works from the thermal image only. They show a task is solvable and are the source for demonstration data. Videos are at 2x speed.</p>
+<p>Inverse kinematics on privileged simulator state, except the patrol, which uses the thermal image only. They show each task is solvable and are the source for demonstration data. Videos at 2x.</p>
 <div class="grid">
-<figure class="g"><video controls loop muted playsinline preload="metadata" src="video/scripted_cable_insertion.mp4"></video><figcaption>Cable insertion. Plug latched in the port.</figcaption></figure>
-<figure class="g"><video controls loop muted playsinline preload="metadata" src="video/scripted_parts_sorting.mp4"></video><figcaption>Parts sorting. Nine parts into the compartments that match the labels.</figcaption></figure>
-<figure class="g"><video controls loop muted playsinline preload="metadata" src="video/scripted_bottle_binning.mp4"></video><figcaption>Bottle binning. Four bottles from the conveyor into the crate.</figcaption></figure>
-<figure class="g"><video controls loop muted playsinline preload="metadata" src="video/scripted_pouring_beads.mp4"></video><figcaption>Pouring beads. 100 of 100 beads in the bowl, cup returned.</figcaption></figure>
-<figure class="g"><video controls loop muted playsinline preload="metadata" src="video/scripted_relative_placement.mp4"></video><figcaption>Relative placement. Toy block placed on the commanded object.</figcaption></figure>
-<figure class="g"><video controls loop muted playsinline preload="metadata" src="video/scripted_fuse_holder.mp4"></video><figcaption>Fuse holder. Lid pulled open, blown fuse into the scrap bin, fresh fuse seated, lid closed.</figcaption></figure>
-<figure class="g"><video controls loop muted playsinline preload="metadata" src="video/scripted_drive_replacement.mp4"></video><figcaption>Drive replacement (seed 4). Release button pressed, failed drive pulled out by its lever, spare carried to the bay and pushed in, lever swung shut. Works on 3 of 9 seeds.</figcaption></figure>
-<figure class="g"><video controls loop muted playsinline preload="metadata" src="video/scripted_cable_routing.mp4"></video><figcaption>Cable routing. The plug is lifted so the taut cable runs above the clips, then lowered so the cable drops into all three.</figcaption></figure>
-<figure class="g"><video controls loop muted playsinline preload="metadata" src="video/scripted_plate_racking.mp4"></video><figcaption>Plate racking. Plate stood on edge in the commanded slot, between tines with 1.5 mm clearance.</figcaption></figure>
-<figure class="g"><video controls loop muted playsinline preload="metadata" src="video/scripted_object_handoff.mp4"></video><figcaption>Handoff. Left arm to right arm, bar set upright on the pad.</figcaption></figure>
-<figure class="g" style="grid-column:1/-1"><video controls loop muted playsinline preload="metadata" src="video/scripted_thermal_patrol.mp4"></video><figcaption>Thermal patrol. Overview camera and thermal camera. Every hot server flagged.</figcaption></figure>
+<figure class="g"><video controls loop muted playsinline preload="metadata" src="video/scripted_cable_insertion.mp4"></video><figcaption><b>Cable insertion.</b> Plug latched in the port.</figcaption></figure>
+<figure class="g"><video controls loop muted playsinline preload="metadata" src="video/scripted_cable_routing.mp4"></video><figcaption><b>Cable routing.</b> Plug lifted so the taut cable clears the clips, then lowered into all three.</figcaption></figure>
+<figure class="g"><video controls loop muted playsinline preload="metadata" src="video/scripted_fuse_holder.mp4"></video><figcaption><b>Fuse holder.</b> Lid opened, blown fuse out, fresh fuse seated, lid closed.</figcaption></figure>
+<figure class="g"><video controls loop muted playsinline preload="metadata" src="video/scripted_drive_replacement.mp4"></video><figcaption><b>Drive replacement</b> (seed 4). Button, lever, pull, carry, push, close.</figcaption></figure>
+<figure class="g"><video controls loop muted playsinline preload="metadata" src="video/scripted_parts_sorting.mp4"></video><figcaption><b>Parts sorting.</b> Nine parts into the matching compartments.</figcaption></figure>
+<figure class="g"><video controls loop muted playsinline preload="metadata" src="video/scripted_bottle_binning.mp4"></video><figcaption><b>Bottle binning.</b> Four bottles from the conveyor into the crate.</figcaption></figure>
+<figure class="g"><video controls loop muted playsinline preload="metadata" src="video/scripted_pouring_beads.mp4"></video><figcaption><b>Pouring beads.</b> 100 of 100 beads in the bowl, cup returned.</figcaption></figure>
+<figure class="g"><video controls loop muted playsinline preload="metadata" src="video/scripted_relative_placement.mp4"></video><figcaption><b>Relative placement.</b> Toy block placed on the commanded object.</figcaption></figure>
+<figure class="g"><video controls loop muted playsinline preload="metadata" src="video/scripted_plate_racking.mp4"></video><figcaption><b>Plate racking.</b> Plate on edge in the slot, 1.5 mm clearance.</figcaption></figure>
+<figure class="g"><video controls loop muted playsinline preload="metadata" src="video/scripted_object_handoff.mp4"></video><figcaption><b>Handoff.</b> Left arm to right arm, bar set upright.</figcaption></figure>
+<figure class="g" style="grid-column:1/-1"><video controls loop muted playsinline preload="metadata" src="video/scripted_thermal_patrol.mp4"></video><figcaption><b>Thermal patrol.</b> Overview and thermal cameras. Every hot server flagged.</figcaption></figure>
 </div>
-<table>
-  <tr><th>Task</th><th>Seeds solved</th><th>Note</th></tr>
-  <tr><td>Cable insertion</td><td class="n">10 / 10</td><td>Random cable start</td></tr>
-  <tr><td>Thermal patrol</td><td class="n">6 / 6</td><td>Thermal image only. Success allows at most 1 false flag</td></tr>
-  <tr><td>Plate racking</td><td class="n">10 / 10</td><td>Target slots 2 to 4 came up in these seeds</td></tr>
-  <tr><td>Handoff</td><td class="n">10 / 10</td><td>Random bar position and yaw</td></tr>
-  <tr><td>Parts sorting</td><td class="n">16 / 24</td><td>Misses are one or two bolts that land short of or beside their compartment</td></tr>
-  <tr><td>Bottle binning</td><td class="n">10 / 12</td><td>Both misses lose one bottle off the belt onto the floor</td></tr>
-  <tr><td>Relative placement</td><td class="n">16 / 24</td><td>Misses are mostly the mug and cereal box: the open gripper (8 cm) barely clears the 7.4 cm mug, and a fingertip landing on the rim knocks it over</td></tr>
-  <tr><td>Pouring beads</td><td class="n">21 / 24</td><td>Beads always reach the bowl. The 3 misses are the cup tipping over on the way back down</td></tr>
-  <tr><td>Fuse holder</td><td class="n">12 / 12</td><td>All four holders. Includes closing the lid and leaving the neighbouring fuses latched</td></tr>
-  <tr><td>Drive replacement</td><td class="n">3 / 9</td><td>Seeds 4, 5, 6 succeed end to end. On the others the carry planner finds no continuous path to the bay (columns 0 to 2), and once the spare pick-up failed</td></tr>
-  <tr><td>Cable routing</td><td class="n">8 / 8</td><td>Grips the plug, lifts it so the taut cable runs above the clip walls, lowers it so the cable drops into the channels. Layout changed to make this possible (see below)</td></tr>
-</table>
+<p><b>Where the scripts fail.</b></p>
+<ul>
+  <li><b>Drive replacement (3 / 9).</b> The arm must hold the drive level all the way to the bay. The configuration it picks the drive up in cannot reach most bays, and it cannot change configuration while holding the drive.</li>
+  <li><b>Parts sorting (16 / 24).</b> One or two bolts land short of or beside their compartment.</li>
+  <li><b>Relative placement (16 / 24).</b> Mostly the mug and cereal box. The open gripper (8 cm) barely clears the 7.4 cm mug, and a fingertip on the rim knocks it over.</li>
+  <li><b>Bottle binning (10 / 12).</b> One bottle is knocked off the belt onto the floor.</li>
+  <li><b>Pouring beads (21 / 24).</b> Beads always reach the bowl. The cup tips over on the way back down.</li>
+  <li><b>Cable routing</b> works only on a simplified layout: a straight 0.40 m cable with the clips on one line.</li>
+</ul>
 
 <h2 id="interface">Interface</h2>
 <pre>import envs
@@ -152,7 +149,7 @@ obs, r, terminated, truncated, info = env.step(env.noop_action())</pre>
   <tr><td>Drive bay clearance</td><td class="n">1.5 mm vertical, 3 mm lateral</td></tr>
   <tr><td>Plate rack clearance</td><td class="n">1.5 mm per side</td></tr>
   <tr><td>Plate mass (melamine)</td><td class="n">about 0.21 kg</td></tr>
-  <tr><td>Cable (routing task)</td><td class="n">52 ball-joint segments, 0.65 m</td></tr>
+  <tr><td>Cable (routing task)</td><td class="n">32 ball-joint segments, 0.40 m</td></tr>
   <tr><td>Beads</td><td class="n">100 rigid spheres</td></tr>
   <tr><td>Thermal scene</td><td class="n">16 racks x 20 servers</td></tr>
   <tr><td>Cable latch tolerance</td><td class="n">2 mm lateral, 2.5 mm seat</td></tr>
@@ -170,7 +167,7 @@ obs, r, terminated, truncated, info = env.step(env.noop_action())</pre>
   <tr><td>Scripted grasp and lift of key objects</td><td class="n">16 / 16</td></tr>
   <tr><td>Scripted bimanual handoff</td><td class="n">10 / 10</td></tr>
   <tr><td>Scripted pour</td><td class="n">21 / 24</td></tr>
-  <tr><td>Scripted pick-and-place, relative placement</td><td class="n">8 / 12</td></tr>
+  <tr><td>Scripted pick-and-place, relative placement</td><td class="n">16 / 24</td></tr>
 </table>
 <p class="small">Scripted runs use inverse kinematics on a planned joint path and no collision avoidance. They are reference solutions, not learned policies.</p>
 
@@ -193,7 +190,7 @@ obs, r, terminated, truncated, info = env.step(env.noop_action())</pre>
   <li>Progress is mostly the starting layout. A motionless arm scores 0.52 on relative placement.</li>
   <li>Prompts were the environments' own instructions, not simplified.</li>
   <li>The velocity-to-target scale is untested.</li>
-  <li>Six environments were changed after the baseline ran: cable routing (now a straight 0.40 m cable and clips on one line), parts sorting (rolling friction on the bolts and standoffs), bottle binning (bottles overlapped), plate racking (source and rack moved to the same side of the arm), cable routing (the cable was too short for the clip layout), fuse holder (its lids tipped open by themselves, and the holders were too close together for the hand) and the handoff bar (now 20 cm). The baseline used the earlier versions.</li>
+  <li>Six environments changed after the baseline ran, which used the earlier versions: cable routing (straight 0.40 m cable, clips on one line), parts sorting (rolling friction), bottle binning (bottle overlap), plate racking (source and rack on the same side of the arm), fuse holder (lids and holder spacing) and handoff (20 cm bar).</li>
 </ul>
 <div class="grid three">
 <figure class="g"><video controls loop muted playsinline preload="metadata" src="video/cable_insertion.mp4"></video><figcaption>Cable insertion</figcaption></figure>
@@ -210,10 +207,9 @@ obs, r, terminated, truncated, info = env.step(env.noop_action())</pre>
 
 <h2 id="limits">Limits</h2>
 <ul>
-  <li>Simulation only.</li>
-  <li>Rendering is not photoreal. Cables and beads are rigid.</li>
-  <li>Scripted policies cover 9 of 11 tasks, 8 of them on at least two thirds of seeds (table above). They are not datasets yet.</li>
-  <li>Baseline has 3 episodes per task.</li>
+  <li>Simulation only. Rendering is not photoreal; cables and beads are rigid.</li>
+  <li>Scripted policies cover all 11 tasks: 6 succeed on every tested seed, the rest on 33% to 88%. They are not datasets yet.</li>
+  <li>The baseline has 3 episodes per task.</li>
 </ul>
 
 <hr>
