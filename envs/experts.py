@@ -13,7 +13,7 @@ import itertools
 import numpy as np
 
 from .common.arms import Q_HOME, down_rot, solve_ik
-from .tasks.bottle_binning import CRATE_C
+from .tasks.bottle_binning import CRATE_C, H_BODY
 from .tests.scripted import Driver
 
 
@@ -71,7 +71,8 @@ def bottle_binning(env, verbose=False, tries_per_bottle=2):
         else:  # lying: close across the body at its centre, hand yawed to the bottle axis
             ax = d.xmat[b].reshape(3, 3)[:, 2]
             yaw = float(np.arctan2(ax[1], ax[0]))
-            pre, grasp = p + np.array([0, 0, 0.12]), p.copy()
+            mid = p + ax * (H_BODY / 2)  # the body origin is at the base end of the bottle
+            pre, grasp = mid + np.array([0, 0, 0.12]), mid.copy()
         sx, sy = CRATE_SLOTS[done % len(CRATE_SLOTS)]
         tx, ty = CRATE_C[0] + sx, CRATE_C[1] + sy
         R = reachable_R(env, drv, [pre, grasp, np.array([tx, ty, 0.40])], yaw)
