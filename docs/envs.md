@@ -298,3 +298,10 @@ arrives about 2 cm off its hover point (the move ends before the arm has converg
 the mug's rim: the mug is 7.4 cm across and the open gripper is about 8 cm, so only 3 mm of error is allowed on each side.
 Settling at the hover point and descending more slowly, and separately shrinking the mug to 6.6 cm, both scored no better
 (13 / 24 and 12 / 24); both were reverted.
+
+Drive replacement carry, negative result: with the hand yawed away from 0 mid-carry (+-0.3 and +-0.5 rad, back to 0 at the bay
+mouth) and carry heights 3 and 6 cm above the seat, `plan_joint_path` finds no continuous orientation-preserving joint
+path from the pick-up pose to any bay in seeds 0, 2, 3, 7. That includes bay (2, 0), at y = +0.16, well outside the thin
+band near the arm's plane, so the band is not the whole story: the configuration used to pick the spare from the stand
+is not connected to the ones that reach the bays. Wrist flips are not allowed (they turn the drive over). Untried: pick
+the spare in a different arm configuration, or set it down and re-grip.
