@@ -176,7 +176,7 @@ and writes an mp4 per successful episode to `out/scripted/`.
 | object_handoff | 10 / 10 | 20 cm bar; `experts.object_handoff` |
 | parts_sorting | 16 / 24 | misses are one or two bolts landing short or beside their compartment |
 | bottle_binning | 10 / 12 | both misses lose one bottle to the floor (seeds 3, 4) |
-| relative_placement | 8 / 12 | `tests/pick_place.py`; misses are mostly the bowl and the tall box. A rewrite on planned paths scored 6 / 12 and was dropped |
+| relative_placement | 16 / 24 | `tests/pick_place.py`; misses are mostly the bowl and the tall box. A rewrite on planned paths scored 6 / 12 and was dropped |
 | pouring_beads | 21 / 24 | `experts.pouring_beads`; beads always reach the bowl, the 3 misses are the cup tipping over on the return descent |
 | fuse_holder | 12 / 12 | `experts.fuse_holder`; holder pitch widened to 50 mm, lid stop at 83 degrees |
 | drive_replacement | 3 / 9 | seeds 4, 5, 6; see below |
@@ -292,3 +292,9 @@ before they were picked. MuJoCo applies rolling friction only with `condim=6`, a
 Setting `condim=6` on the bolt shank and the standoff gives 16 / 24 (seeds 0 to 23). Dropping deeper into the
 compartments changed nothing. Remaining misses are bolts that land 5 to 8 cm short of their slot or in a neighbouring
 compartment; the cause is not established. This is an environment change made after the baseline run.
+
+Relative placement, measured over 24 seeds: 16 / 24 (the earlier 8 / 12 was the same rate). In the mug failures the hand
+arrives about 2 cm off its hover point (the move ends before the arm has converged), descends, and a fingertip lands on
+the mug's rim: the mug is 7.4 cm across and the open gripper is about 8 cm, so only 3 mm of error is allowed on each side.
+Settling at the hover point and descending more slowly, and separately shrinking the mug to 6.6 cm, both scored no better
+(13 / 24 and 12 / 24); both were reverted.
