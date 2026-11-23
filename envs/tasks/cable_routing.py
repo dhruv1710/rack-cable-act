@@ -13,11 +13,11 @@ import numpy as np
 from ..common.base_env import TaskEnv
 from ..common.geom import CAP, box, qx
 
-N_SEG, SEG_LEN, CABLE_R = 40, 0.0125, 0.0030
+N_SEG, SEG_LEN, CABLE_R = 52, 0.0125, 0.0030  # 0.65 m of cable plus the plug
 BOARD_Z = 0.012  # tray surface height
 CLIP_X = (0.44, 0.56, 0.68)
 CLIP_L, CLIP_W, CLIP_H = 0.016, 0.0125, 0.020  # length (along cable), clear width, wall height
-ANCHOR = (0.31, 0.16)
+ANCHOR = (0.31, 0.08)
 
 
 class CableRouting(TaskEnv):
@@ -122,15 +122,18 @@ class CableRouting(TaskEnv):
 
     def randomize_state(self, rng):
         m, d = self.m, self.d
+        # Clips are staggered a little sideways. The cable must weave through them, so the path
+        # anchor -> clip 0 -> 1 -> 2 -> plug has to be shorter than the cable. With +-7 cm stagger it was about 0.62 m
+        # against a 0.54 m cable, which is infeasible.
         ys = (
-            np.array([-0.07, 0.07, -0.05])
+            np.array([-0.02, 0.02, -0.01])
             if not self.randomize
-            else np.array([-0.07, 0.07, -0.05]) + rng.uniform(-0.03, 0.03, 3)
+            else np.array([-0.02, 0.02, -0.01]) + rng.uniform(-0.01, 0.01, 3)
         )
         self.clip_y = ys
         for b, p, y in zip(self.clip_bid, self._clip_pos0, ys):
             m.body_pos[b] = (p[0], y, p[2])
-        ay = ANCHOR[1] + (rng.uniform(-0.03, 0.03) if self.randomize else 0.0)
+        ay = ANCHOR[1] + (rng.uniform(-0.02, 0.02) if self.randomize else 0.0)
         m.body_pos[self.root_bid] = (ANCHOR[0], ay, self._root_pos0[2])
         # initial cable layout: gentle sideways S-curve that stays off the clip row
         bend = rng.uniform(-0.05, 0.05) if self.randomize else 0.0

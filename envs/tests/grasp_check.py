@@ -103,8 +103,8 @@ def run(name):
         yaw = float(np.arctan2(d.xmat[b].reshape(3, 3)[1, 0], d.xmat[b].reshape(3, 3)[0, 0]))
         out.append(
             (
-                "bar (left arm)",
-                lift_test(env, b, p + np.array([0, 0, 0.14]), np.array([p[0], p[1], 0.075]), down_rot(yaw), arm=0),
+                "bar top (left arm)",
+                lift_test(env, b, p + np.array([0, 0, 0.22]), np.array([p[0], p[1], 0.17]), down_rot(yaw), arm=0),
             )
         )
     elif name == "plate_racking":

@@ -8,9 +8,11 @@ Each reads privileged simulator state (object poses), solves inverse kinematics 
 
 from __future__ import annotations
 
+import itertools
+
 import numpy as np
 
-from .common.arms import down_rot, solve_ik
+from .common.arms import Q_HOME, down_rot, solve_ik
 from .tasks.bottle_binning import CRATE_C
 from .tests.scripted import Driver
 
@@ -285,4 +287,332 @@ def parts_sorting(env, verbose=False, attempts=3):
             if verbose:
                 print(f"  retry {n} (lifted={lifted})")
     drv.hold(1.5)
+    return env.evaluate()
+
+
+# ------------------------------------------------------------------------------------------------- path planning
+def plan_joint_path(drv, poses, n_seeds=24, small=0.5, seed=0, allow_flip=True, big_steps="any"):
+    """Joint-space path through a list of Cartesian waypoints (position, rotation).
+
+    A waypoint has several IK solutions on different arm configurations, and a warm start from the previous waypoint
+    often stays on one that dead-ends. So: collect distinct IK solutions per waypoint (warm start plus random seeds,
+    including the equivalent pose with the hand turned 180 degrees about its approach axis, which the symmetric gripper
+    allows), then pick the chain from the current joint state with the fewest large joint steps and, among those, the
+    smallest steps (dynamic programming). big_steps limits where a large step may occur: "any", "first" (only from the
+    current state to the first waypoint, e.g. a wrist flip done high above everything) or "none".
+    Returns (list of q, number of large steps, largest step); the list is None if no chain satisfies big_steps."""
+    env = drv.env
+    rng = np.random.default_rng(seed)
+    q_now = drv.joint_state()
+    flip = np.diag([-1.0, -1.0, 1.0])  # turn about the tool z axis (approach direction)
+    layers, prev_best = [], q_now
+    for pos, R in poses:
+        sols = []
+        for Rt in (R, R @ flip) if allow_flip else (R,):
+            q, ok = solve_ik(env.m, env.d, drv.arm, pos, Rt, q_init=prev_best, iters=250)
+            if ok:
+                sols.append(q)
+            tries = 0
+            while tries < 3 * n_seeds and (tries < n_seeds or len(sols) < 4):  # thin regions need many more seeds
+                tries += 1
+                q0 = np.clip(Q_HOME + rng.normal(0, 0.7, 7), drv.arm.lo + 0.05, drv.arm.hi - 0.05)
+                q, ok = solve_ik(env.m, env.d, drv.arm, pos, Rt, q_init=q0, iters=250)
+                if ok and all(np.abs(q - o).max() > 0.05 for o in sols):
+                    sols.append(q)
+        if not sols:
+            return None, 99, float("inf")
+        layers.append(sols)
+        prev_best = min(sols, key=lambda c: np.abs(c - prev_best).max())
+
+    def cost(a, b_, allowed):
+        st = np.abs(a - b_).max()
+        if st <= small:
+            return st
+        return 10.0 + st if allowed else 1e6  # a large step costs far more than any run of small ones
+
+    acc = [np.array([cost(c, q_now, big_steps in ("any", "first")) for c in layers[0]])]
+    back = []
+    for i in range(1, len(layers)):
+        step = np.array([[cost(c, p_, big_steps == "any") for p_ in layers[i - 1]] for c in layers[i]])
+        tot = step + acc[-1][None, :]
+        arg = tot.argmin(1)
+        acc.append(tot[np.arange(len(layers[i])), arg])
+        back.append(arg)
+    j = int(acc[-1].argmin())
+    final_cost = float(acc[-1][j])
+    chain = [layers[-1][j]]
+    for i in range(len(layers) - 1, 0, -1):
+        j = int(back[i - 1][j])
+        chain.append(layers[i - 1][j])
+    chain.reverse()
+    if final_cost >= 1e6:
+        return None, 99, float("inf")
+    steps = [np.abs(chain[0] - q_now).max()] + [np.abs(chain[i] - chain[i - 1]).max() for i in range(1, len(chain))]
+    return chain, sum(st > small for st in steps), float(max(steps))
+
+
+def run_joint_path(drv, qs, seconds, grip=None, max_speed=1.2):
+    """Execute a joint path (list of q) from the current state. Each segment takes its share of `seconds`, but never
+    less than the time the largest joint step needs at max_speed (rad/s), so a wrist flip is done slowly."""
+    if grip is not None:
+        drv.grip = grip
+    qs = [drv.joint_state(), *qs]
+    base = seconds / max(len(qs) - 1, 1)
+    for a, b_ in itertools.pairwise(qs):
+        n = max(1, int(max(base, np.abs(b_ - a).max() / max_speed) * 50))
+        for i in range(1, n + 1):
+            drv.env.step(drv._act(a + (b_ - a) * (i / n)))
+
+
+def carry_path(drv, start, goal, R, seconds, n=30, **kw):
+    """Straight-line Cartesian carry executed on a planned joint path. Returns (large steps, largest step)."""
+    poses = [(start + (goal - start) * s, R) for s in np.linspace(0, 1, n)[1:]]
+    qs, n_big, worst = plan_joint_path(drv, poses, **kw)
+    if qs is not None:
+        run_joint_path(drv, qs, seconds)
+    return n_big, worst
+
+
+# ------------------------------------------------------------------------------------------------- plate racking
+def plate_racking(env, verbose=False):
+    """Grip the plate by its near rim with the hand horizontal, carry it flat and high across to the target slot with
+    the hand yawed (straight ahead, |y| < 0.07 m, the wrist has no IK solution), square the hand up over the slot, roll
+    the wrist to stand the plate on edge, measure the plate relative to the hand and lower it between the tines."""
+    from .common.arms import forward_rot
+    from .tasks.plate_racking import BASE_T, PLATE_R, RACK_C
+
+    d, drv = env.d, Driver(env)
+    p0 = d.xpos[env.plate].copy()
+    flat = forward_rot(0.0, np.pi / 2)
+    rim = np.array([p0[0] - PLATE_R + 0.012, p0[1], p0[2]])
+    drv.grip = 1.0
+    stage = rim + np.array([-0.16, 0, 0.12])
+    for target, secs in ((stage, 2.5), (rim + np.array([-0.08, 0, 0.0]), 1.5), (rim, 1.5)):
+        carry_path(drv, drv.arm.tcp_pos(d).copy(), target, flat, secs, n=14)
+    drv.hold(0.5)
+    gentle_grasp(drv, seconds=1.0)
+    carry_path(drv, drv.arm.tcp_pos(d).copy(), rim + np.array([0, 0, 0.12]), flat, 1.4, n=8)
+
+    def held():
+        return np.linalg.norm(d.xpos[env.plate] - drv.arm.tcp_pos(d)) < 0.13
+
+    sy = env.slot_y(env.target)
+    plate_dx = d.xpos[env.plate][0] - drv.arm.tcp_pos(d)[0]  # plate centre ahead of the hand
+    top = np.array([RACK_C[0] - plate_dx, sy, 0.34])
+    # The goal region may only be reachable on the other arm configuration. The symmetric hand allows a 180 degree wrist
+    # flip: plan "lift high, then carry" as one chain in which the only large step is the first one (the flip, done high
+    # above everything with the plate still gripped).
+    here = drv.arm.tcp_pos(d).copy()
+    hi = here + np.array([0.0, 0.0, 0.14])
+    poses = [(hi, flat)] + [(hi + (top - hi) * s_, flat) for s_ in np.linspace(0, 1, 30)[1:]]
+    qs, n_big, worst = plan_joint_path(drv, poses, big_steps="first")
+    if qs is None:
+        return env.evaluate(), None
+    run_joint_path(drv, qs, 7.0)
+    if verbose:
+        print(f"  carry: {n_big} large joint step(s), largest {worst:.2f} rad")
+    if verbose:
+        print("  over slot, flat: plate", np.round(d.xpos[env.plate], 3), "held", held())
+    # stand the plate on edge: roll the wrist 90 degrees in place, either way, planned as one continuous joint path
+    pos = drv.arm.tcp_pos(d).copy()
+    best = None
+    for end in (0.0, np.pi):
+        poses = [(pos, forward_rot(0.0, r)) for r in np.linspace(np.pi / 2, end, 8)[1:]]
+        qs, n_big, worst = plan_joint_path(drv, poses, big_steps="none")
+        if qs is not None and (best is None or (n_big, worst) < best[:2]):
+            best = (n_big, worst, qs, end)
+    if best is None:
+        return env.evaluate(), None
+    run_joint_path(drv, best[2], 3.0)
+    drv.hold(0.6)
+    vert = forward_rot(0.0, best[3])
+    if verbose:
+        print(f"  rolled to edge: {best[0]} large step(s), plate {np.round(d.xpos[env.plate], 3)} held {held()}")
+    off = d.xpos[env.plate] - drv.arm.tcp_pos(d)  # plate centre relative to the hand
+    goal_xy = np.array([RACK_C[0], sy])
+    z_hover, z_final = BASE_T + PLATE_R + 0.07, BASE_T + PLATE_R + 0.0015
+
+    def go(target, seconds, n=14, big="none"):
+        return carry_path(drv, drv.arm.tcp_pos(d).copy(), target, vert, seconds, n=n, big_steps=big)
+
+    tcp = np.array([*(goal_xy - off[:2]), z_hover - off[2]])
+    go(tcp, 3.0)
+    drv.hold(0.6)
+    for _ in range(3):  # centre the plate on the slot within ~1 mm before it goes between the tines
+        tcp[:2] += goal_xy - d.xpos[env.plate][:2]
+        go(tcp, 1.0, n=4)
+        drv.hold(0.5)
+    if verbose:
+        print("  on edge over slot: plate", np.round(d.xpos[env.plate], 4), "goal", np.round(goal_xy, 4))
+    for z in np.linspace(z_hover, z_final, 7)[1:]:
+        tcp[:2] += 0.5 * (goal_xy - d.xpos[env.plate][:2])
+        tcp[2] = z - off[2]
+        go(tcp, 0.9, n=3)
+    drv.hold(0.6)
+    drv.release(0.8)
+    for off in ((-0.05, 0, 0), (-0.03, 0, 0.03), (0, 0, 0.06), (-0.05, 0, 0.05), (0, 0, 0.12), (-0.08, 0, 0.08)):
+        if not env._held():
+            break  # fingers are clear of the plate
+        go(drv.arm.tcp_pos(d) + np.array(off), 1.5, n=5, big="first")  # plate released: one bigger step is safe
+        drv.hold(0.3)
+    drv.hold(1.5)
+    return env.evaluate(), None
+
+
+# --------------------------------------------------------------------------------------------- planned Cartesian moves
+def _log_rot(R):
+    """Rotation vector of a rotation matrix (angle < ~170 degrees)."""
+    ang = float(np.arccos(np.clip((np.trace(R) - 1) / 2, -1, 1)))
+    if ang < 1e-6:
+        return np.zeros(3)
+    w = np.array([R[2, 1] - R[1, 2], R[0, 2] - R[2, 0], R[1, 0] - R[0, 1]]) / (2 * np.sin(ang))
+    return w * ang
+
+
+def _exp_rot(w):
+    ang = float(np.linalg.norm(w))
+    if ang < 1e-9:
+        return np.eye(3)
+    k = w / ang
+    K = np.array([[0, -k[2], k[1]], [k[2], 0, -k[0]], [-k[1], k[0], 0]])
+    return np.eye(3) + np.sin(ang) * K + (1 - np.cos(ang)) * K @ K
+
+
+def pmove(drv, pos, R, seconds, n=12, big="none"):
+    """Move the TCP in a straight line to `pos` while turning to `R`, on a planned continuous joint path (see
+    plan_joint_path). big: where a large joint step is allowed ("none", "first", "any"). Returns True if it moved."""
+    d, arm = drv.env.d, drv.arm
+    p0, R0 = arm.tcp_pos(d).copy(), d.site_xmat[arm.tcp].reshape(3, 3).copy()
+    w = _log_rot(R0.T @ R)
+    poses = [(p0 + (np.asarray(pos) - p0) * s, R0 @ _exp_rot(w * s)) for s in np.linspace(0, 1, n)[1:]]
+    qs, _nb, _worst = plan_joint_path(drv, poses, big_steps=big)
+    if qs is None:
+        return False
+    run_joint_path(drv, qs, seconds)
+    return True
+
+
+def pmove_safe(drv, pos, R, seconds, n=8):
+    """pmove that tries a continuous path first and only then one with a large first step (used for retreats)."""
+    return pmove(drv, pos, R, seconds, n=n) or pmove(drv, pos, R, seconds, n=n, big="first")
+
+
+def pmove_via(drv, points, R, seconds, n_per=8, big="first"):
+    """Move through several points with the hand held at R: the arm jumps to the first point (where a large joint step
+    is allowed, e.g. to turn the hand into place), then follows straight legs through the rest. One joint-space chain
+    for the whole route, chosen globally so the first pose is the configuration that connects to the later ones.
+    Returns True if it moved."""
+    poses = [(np.asarray(points[0]), R)]
+    for a, b in itertools.pairwise(points):
+        poses += [(np.asarray(a) + (np.asarray(b) - np.asarray(a)) * s_, R) for s_ in np.linspace(0, 1, n_per)[1:]]
+    qs, _nb, _worst = plan_joint_path(drv, poses, big_steps=big)
+    if qs is None:
+        return False
+    run_joint_path(drv, qs, seconds)
+    return True
+
+
+# ------------------------------------------------------------------------------------------------------- handoff
+def object_handoff(env, verbose=False):
+    """Left arm takes the bar by its top (a vertical hand's palm stops the fingertips ~4.5 cm below a bar top), squares
+    it to the world axes while carrying, the right arm takes it from the other side 12.5 cm above its bottom, the left
+    lets go, and the right sets the bar on the pad. The right hand is horizontal, so its TCP must be >= 12 cm above the
+    bench at the pad: that is why the bar is 20 cm tall."""
+    from .common.arms import forward_rot
+    from .tasks.object_handoff import BAR_HALF, PAD_C
+
+    d = env.d
+    L, Rr = Driver(env, 0), Driver(env, 1)
+    bar = env.bar
+    p = d.xpos[bar].copy()
+    yaw = float(np.arctan2(d.xmat[bar].reshape(3, 3)[1, 0], d.xmat[bar].reshape(3, 3)[0, 0]))
+    z_top = p[2] + BAR_HALF[2]
+    z_grip_l = z_top - 0.03
+    hp = np.array([0.45, 0.09, 0.42])  # off the right arm's sagittal plane (y = 0): IK has no solution there
+    pre_l, grasp_l = np.array([p[0], p[1], z_grip_l + 0.16]), np.array([p[0], p[1], z_grip_l])
+    RL = reachable_R(env, L, [pre_l, grasp_l], yaw, extra=(np.pi / 2,))
+    if RL is None:
+        return env.evaluate()
+
+    def log(tag):
+        if verbose:
+            print(f"  {tag:28s} stage={env.stage} bar={np.round(d.xpos[bar], 3)}")
+
+    pmove(L, pre_l, RL, 3.0, n=14, big="first")
+    L.hold(0.4, grip=1.0)
+    pmove(L, grasp_l, RL, 2.0, n=10)
+    L.hold(0.4)
+    gentle_grasp(L, seconds=1.0)
+    pmove(L, pre_l, RL, 1.5, n=8)
+    log("left grasped and lifted")
+    Rh = reachable_R(env, L, [hp], 0.0, extra=(np.pi / 2, -np.pi / 2))
+    if Rh is None:
+        return env.evaluate()
+    pmove(L, hp, Rh, 4.0, n=18, big="first")
+    L.hold(0.6)
+    log("left at handoff point")
+    RR = forward_rot(np.pi, 0.0)
+    b = d.xpos[bar].copy()
+    grasp_r = np.array([b[0], b[1], b[2] - BAR_HALF[2] + 0.125])
+    pmove_via(Rr, [grasp_r + np.array([0.20, 0.0, 0.06]), grasp_r + np.array([0.08, 0.0, 0.0]), grasp_r], RR, 7.0)
+    Rr.hold(0.4)
+    gentle_grasp(Rr, seconds=1.0)
+    log("right grasped (both hold)")
+    L.release(0.6)
+    log("left released")
+    pmove(L, hp + np.array([-0.12, 0.0, 0.0]), Rh, 1.5, n=8)
+    off = Rr.arm.tcp_pos(d) - d.xpos[bar]
+    goal = np.array([PAD_C[0], PAD_C[1], BAR_HALF[2] + 0.004]) + off
+    pmove(Rr, goal + np.array([0.0, 0.0, 0.12]), RR, 3.5, n=14)
+    pmove(Rr, goal, RR, 1.8, n=8)
+    Rr.hold(0.4)
+    Rr.hold(1.2, grip=0.58)  # loosen just enough for the bar to slip down and seat flat on the pad under its weight
+    Rr.release(0.8)
+    log("right released on pad")
+    pmove(Rr, goal + np.array([0.10, 0.0, 0.05]), RR, 1.5, n=6, big="first")
+    Rr.hold(1.0)
+    return env.evaluate()
+
+
+# ------------------------------------------------------------------------------------------------------ pouring
+def pouring_beads(env, verbose=False, tilt_max=2.35, back=0.03, z_over=0.15):
+    """Grip the cup, carry it low over the bowl, tilt it about the world y axis until it is empty, set it back down on
+    the table where it started and let go. Every move is a planned continuous joint path (see plan_joint_path)."""
+    from .tasks.pouring_beads import rot_y
+
+    d = env.d
+    drv = Driver(env)
+    R0 = down_rot(0.0)
+    c = d.xpos[env.cup].copy()
+    pmove(drv, np.array([c[0], c[1], 0.30]), R0, 3.0, n=12, big="first")
+    drv.hold(0.4, grip=1.0)
+    pmove(drv, np.array([c[0], c[1], 0.055]), R0, 2.0, n=10)
+    drv.hold(0.4)
+    gentle_grasp(drv, seconds=1.0)
+    pmove(drv, np.array([c[0], c[1], 0.20]), R0, 1.5, n=8)
+    over = np.array([env.bowl_c[0] - back, env.bowl_c[1], z_over])
+    pmove(drv, np.array([over[0], over[1], 0.20]), R0, 2.5, n=12)
+    pmove(drv, over, R0, 1.2, n=6)
+    for k in range(1, 9):  # slow tilt about the TCP
+        pmove(drv, over, rot_y(tilt_max * k / 8) @ R0, 0.6, n=3)
+    for _ in range(20):  # wait until the cup is empty (<= 2 beads left)
+        drv.hold(0.5)
+        if env.beads_in_cup() <= 2:
+            break
+    drv.hold(1.0)
+    n_in, n_sp = env._counts()
+    if verbose:
+        print(f"  after pour: in bowl {n_in}/100, spilled {n_sp}")
+    Rt = rot_y(tilt_max) @ R0
+    up = np.array([over[0] - 0.02, over[1], 0.27])
+    pmove(drv, up, Rt, 1.8, n=8)  # rise clear of the bowl while still tipped
+    for k in range(7, -1, -1):  # untilt in the air
+        pmove(drv, up, rot_y(tilt_max * k / 8) @ R0, 0.5, n=3)
+    pmove(drv, np.array([c[0], c[1], 0.20]), R0, 2.0, n=12)
+    pmove(drv, np.array([c[0], c[1], 0.058]), R0, 1.5, n=8)
+    drv.hold(0.5)
+    drv.hold(0.8, grip=0.6)  # loosen so the cup seats on the table before letting go
+    drv.release(0.6)
+    pmove_safe(drv, np.array([c[0], c[1], 0.25]), R0, 1.5, n=8)
+    drv.hold(1.0)
     return env.evaluate()

@@ -15,9 +15,10 @@ from ..common.base_env import TaskEnv
 from ..common.geom import CYL, box, cyl, qx, qz
 
 PLATE_R, PLATE_T = 0.100, 0.009
-SRC_C = np.array([0.52, -0.20])
+SRC_C = np.array([0.38, -0.30])  # same side of the arm as the rack (a carry across the base is unreachable) and
+# behind it: the wrist trails the hand by ~15 cm and would hit the source posts when the plate goes into the rack
 POST_H = 0.16  # plate stand height: a horizontal Panda hand needs >=12 cm of palm clearance
-RACK_C = np.array([0.58, 0.14])
+RACK_C = np.array([0.70, -0.20])
 SLOT_PITCH, N_SLOTS = 0.042, 5
 TINE_R, TINE_H, TINE_GAP = 0.0028, 0.085, 0.0095  # tine radius, height, half-gap between the pair
 TINE_X = 0.068
@@ -29,7 +30,7 @@ class PlateRacking(TaskEnv):
     name = "plate_racking"
     max_seconds = 120.0
     success_hold = 0.5
-    overview = ((0.45, -0.60, 0.50), (0.50, 0.0, 0.06))
+    overview = ((0.45, -0.95, 0.50), (0.55, -0.25, 0.06))
 
     def slot_y(self, k):
         return RACK_C[1] + (k - (N_SLOTS - 1) / 2) * SLOT_PITCH

@@ -100,7 +100,7 @@ clearance. The spare lies on a stand with its lever open; insert it, then push t
 | Panda grasp + lift of key objects (bottles standing/lying, bead-filled cup, nut, bolt, 3 standoffs, fuse, bar, plate rim, spare drive, can, mug, apple, block) | 16 / 16 |
 | scripted bimanual handoff, bar to pad | 1 / 8 (seed 0 only; contact-based stage tracking confirmed) |
 | scripted pour (100 beads into the bowl, cup returned) | 4 / 8 episodes succeed |
-| scripted pick-and-place for relative placement | about 6 / 8-10 episodes (failures are joint-space paths bumping distractors) |
+| scripted pick-and-place for relative placement | 8 / 12 episodes |
 
 The scripted solutions are test drivers, not expert policies: they use privileged state and joint-space/linear
 IK without collision avoidance.
@@ -164,44 +164,59 @@ objects already near their goal), not task progress by the policy; a still arm s
 
 ## Scripted policies
 
-Reference solutions that read privileged simulator state and use inverse kinematics (`envs/tests/*`, `envs/experts.py`,
+Reference solutions that use inverse kinematics on a planned joint path (`envs/experts.py`, `envs/tests/*`,
 `tasks/rack_cable/scripted_insert.py`). `python -m envs.record_scripted <task|all> <n_seeds>` runs them with rendering
 and writes an mp4 per successful episode to `out/scripted/`.
 
 | task | seeds solved | note |
 |---|---|---|
 | cable_insertion | 10 / 10 | random cable start (`scripted_insert.py --randomize`) |
-| thermal_patrol | 6 / 6 | perception-guided: uses the thermal image only, no hot-server list |
-| parts_sorting | 8 / 12 | `experts.parts_sorting`; misses are single parts |
-| bottle_binning | 8 / 12 | `experts.bottle_binning`; misses are one bottle short |
-| relative_placement | 6 / 8 | failures: joint-space path bumps a distractor |
-| pouring_beads | 4 / 8 | failures not diagnosed |
-| object_handoff | 1 / 8 | tuned on seed 0. The random bar yaw leaves the bar rotated at the handoff point, and a lower right-hand grasp cannot reach the pad height with a horizontal hand (needs >= 12 cm) |
-| others | none | cable_routing, fuse_holder, plate_racking, drive_replacement |
+| thermal_patrol | 6 / 6 | perception-guided: thermal image only, no hot-server list |
+| plate_racking | 10 / 10 | slots 2 to 4 came up in these seeds |
+| object_handoff | 10 / 10 | 20 cm bar; `experts.object_handoff` |
+| parts_sorting | 8 / 12 | misses are single parts |
+| bottle_binning | 8 / 12 | misses are one bottle short |
+| relative_placement | 8 / 12 | `tests/pick_place.py`; misses are mostly the bowl and the tall box. A rewrite on planned paths scored 6 / 12 and was dropped |
+| pouring_beads | 5 / 8 | `experts.pouring_beads`; beads always reach the bowl, the misses are the cup return |
+| others | none | cable_routing, fuse_holder, drive_replacement |
 
 Findings from writing them:
 
 - The Panda hand is symmetric under a 180 degree turn, so pick the yaw whose IK converges (`experts.reachable_R`) and
   skip a pick rather than execute an unsolved IK result. The `ok` flag of `solve_ik` is conservative: the arm often
   tracks a target that it reports as not converged.
+- A waypoint has several IK solutions on different arm configurations, and a warm start from the previous waypoint
+  often dead-ends on one. `experts.plan_joint_path` collects solutions per waypoint (random seeds, plus the equivalent
+  pose with the hand turned 180 degrees) and picks the chain with the fewest large joint steps by dynamic
+  programming. A large step is allowed only where it is safe (`big_steps="first"`, e.g. a wrist flip high above the
+  scene). This is what made plate racking and the handoff work.
+- With the hand pointing straight ahead there is a band about 7 cm either side of the arm's sagittal plane where the
+  warm-started IK has no solution. Layouts (and the handoff point) avoid it.
 - The arm lags its target, so hold 0.5 s at the pre-grasp pose before a tight approach.
-- Light or small parts (28 g bottles, 12 mm cylinders) are squirted out by an instant close. `gentle_grasp` closes over
-  about 1.2 s.
-- A lying cylinder rolls away from the first finger when gripped across its axis. Grip its flat end faces (along the
-  axis) instead.
-- The open fingers span about 8 cm: choose the grip yaw whose closing axis has no neighbour within about 6 cm, and defer
-  a part that is blocked on every yaw (`experts._blockers`).
+- Light or small parts (28 g bottles, 12 mm cylinders) are squirted out by an instant close: `gentle_grasp` closes over
+  about 1.2 s. To seat an object on release, loosen the grip first and let it settle (plate, bar, cup).
+- A lying cylinder rolls away from the first finger when gripped across its axis: grip its flat end faces instead.
+- A vertical hand's palm stops the fingertips about 4.5 cm below the top of a tall object, and a horizontal hand needs
+  its TCP 12 cm above the bench. A handoff needs a bar tall enough for both grasps (20 cm).
+- The wrist trails the hand by about 15 cm, so a stand behind the target can be hit when placing (plate racking).
+- The open fingers span about 8 cm: choose the grip yaw whose closing axis has no neighbour within about 6 cm
+  (`experts._blockers`).
 - A servo that centres on a hot server's blob must use the camera's offset from the base origin (8 cm on the patrol
-  robot) and the whole blob's bounding-box middle. A brightness-weighted centroid is pulled off by the neighbours that
-  pick up some heat.
-- Plate racking (attempted, not working): with the hand horizontal, the Panda has a band of about |y| < 0.07 m directly
-  in front of the base where this wrist orientation has no IK solution from the usual seeds, and the carry to the far
-  slots crosses it. The plate drops as the arm crosses. The carry needs a different wrist orientation or a path around
-  the band.
+  robot) and the bounding-box middle of the hottest region. A brightness-weighted centroid is pulled off by neighbours.
 
-### Bottle binning layout fix
+### Environment changes made while writing the policies
 
 Lying bottles used a random yaw on the belt although a bottle is 19.5 cm long and the belt 17 cm wide, so they
 overlapped and leaned on each other at reset. The belt is now 22 cm wide with two lanes along the belt. A lane holds
 one lying bottle (aligned with the belt) plus one standing bottle, or two standing bottles. The pi0.5 baseline ran
 before this change, on the earlier layout.
+
+- **Plate racking:** the source stand and the rack are now on the same side of the arm (a carry across the base is
+  unreachable) and the stand is behind the rack (the wrist would hit its posts).
+- **Object handoff:** the bar is 20 cm tall (was 15 cm): a vertical hand grips only the top few centimetres and the
+  horizontal hand needs its grasp point 12 cm up when it sets the bar down.
+- **Cable routing:** the clips were staggered 7 cm sideways, so the path anchor, clip 0, 1, 2 and plug was about 0.62 m
+  against a 0.54 m cable. The stagger is now 2 cm and the cable 0.65 m. No policy has been written for it, so the fix is
+  checked by length only.
+
+The pi0.5 baseline ran before these changes, on the earlier layouts.

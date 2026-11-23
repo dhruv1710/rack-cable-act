@@ -20,10 +20,8 @@ from PIL import Image
 
 import envs
 
-from .experts import bottle_binning, parts_sorting, thermal_patrol
-from .tests.handoff_test import handoff
+from .experts import bottle_binning, object_handoff, parts_sorting, plate_racking, pouring_beads, thermal_patrol
 from .tests.pick_place import solve_relative_placement
-from .tests.pour_test import pour
 
 OUT = Path("out/scripted")
 IMG_HW = (288, 384)
@@ -31,11 +29,12 @@ STRIDE = 2  # keep every 2nd 50 Hz frame -> 25 fps recording, played back at 2x
 
 POLICIES = {
     "relative_placement": lambda env: solve_relative_placement(env)[1],
-    "object_handoff": lambda env: handoff(env, verbose=False)[0],
-    "pouring_beads": lambda env: pour(env, verbose=False),
+    "object_handoff": object_handoff,
+    "pouring_beads": pouring_beads,
     "parts_sorting": parts_sorting,
     "bottle_binning": bottle_binning,
     "thermal_patrol": thermal_patrol,
+    "plate_racking": lambda env: plate_racking(env)[0],
 }
 
 

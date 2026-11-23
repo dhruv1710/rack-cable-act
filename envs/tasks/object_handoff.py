@@ -14,7 +14,8 @@ from ..common.arms import ArmCfg, down_rot
 from ..common.base_env import TaskEnv
 from ..common.geom import box, qz
 
-BAR_HALF = (0.02, 0.02, 0.075)
+# 20 cm bar: a vertical hand grips only the top ~4 cm (palm), a horizontal one needs its TCP >= 12 cm up
+BAR_HALF = (0.02, 0.02, 0.10)
 PAD_C, PAD_HALF = np.array([0.72, 0.24]), 0.055
 START_C = np.array([0.30, -0.22])
 
