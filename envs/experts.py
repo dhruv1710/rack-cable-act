@@ -1171,3 +1171,41 @@ def drive_replacement(env, verbose=False):
         drive_close_lever(env, drv, verbose=verbose)
         drv.hold(1.0, grip=1.0)
     return env.evaluate()
+
+
+# ---------------------------------------------------------------------------------------------------- cable routing
+def cable_routing(env, verbose=False, x_end=0.745, z_high=0.12, z_low=0.022):
+    """Grip the plug, lift it high and pull the cable taut along the clip row (a taut cable runs above the clip walls),
+    then lower the plug slowly: the cable drops into the channels. The cable is 0.40 m, so the plug ends at x = 0.74.
+    Returns env.evaluate()."""
+    d = env.d
+    drv = Driver(env)
+    plug = d.site_xpos[env.plug_site].copy()
+    ax = d.xmat[env.seg_bid[-1]].reshape(3, 3)[:, 0]  # the cable's last segment points along the plug
+    yaw = float(np.arctan2(ax[1], ax[0]))  # down_rot(yaw) closes the pads across this direction: across the plug
+    R = down_rot(yaw)
+    pmove(drv, np.array([plug[0], plug[1], 0.12]), R, 3.0, n=12, big="first")
+    drv.hold(0.4, grip=1.0)
+    pmove(drv, np.array([plug[0], plug[1], 0.024]), R, 2.0, n=10)
+    drv.hold(0.4)
+    gentle_grasp(drv, seconds=1.0)
+    pmove(drv, np.array([plug[0], plug[1], 0.07]), R, 1.5, n=8)
+    drv.hold(0.4)
+    ok1 = pmove(drv, np.array([x_end, 0.0, z_high]), R, 4.0, n=14)
+    drv.hold(0.8)
+    if verbose:
+        print(f"  pulled taut: planned {ok1}, plug {np.round(d.site_xpos[env.plug_site], 3)}, {env.evaluate()}")
+    for k in range(1, 7):  # lower slowly, staying taut
+        z = z_high + (z_low - z_high) * k / 6
+        pmove(drv, np.array([x_end + 0.01 * k / 6, 0.0, z]), R, 1.0, n=4)
+    pmove(drv, np.array([x_end + 0.01, 0.0, z_low]), R, 1.5, n=4)  # the arm lags: settle at the bottom
+    drv.hold(0.8)
+    for k in range(1, 5):  # straighten the cable along the tray with a slow extra pull
+        pmove(drv, np.array([x_end + 0.01 + 0.005 * k, 0.0, z_low]), R, 1.0, n=3)
+    drv.hold(1.0)
+    if verbose:
+        print(f"  lowered: plug {np.round(d.site_xpos[env.plug_site], 3)}, {env.evaluate()}")
+    drv.release(0.6)
+    pmove_safe(drv, np.array([x_end, 0.0, 0.15]), R, 1.5, n=6)
+    drv.hold(1.5)
+    return env.evaluate()

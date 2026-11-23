@@ -22,6 +22,7 @@ import envs
 
 from .experts import (
     bottle_binning,
+    cable_routing,
     drive_replacement,
     fuse_holder,
     object_handoff,
@@ -46,6 +47,7 @@ POLICIES = {
     "plate_racking": lambda env: plate_racking(env)[0],
     "fuse_holder": fuse_holder,
     "drive_replacement": drive_replacement,
+    "cable_routing": cable_routing,
 }
 
 

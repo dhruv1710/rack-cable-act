@@ -180,7 +180,7 @@ and writes an mp4 per successful episode to `out/scripted/`.
 | pouring_beads | 21 / 24 | `experts.pouring_beads`; beads always reach the bowl, the 3 misses are the cup tipping over on the return descent |
 | fuse_holder | 12 / 12 | `experts.fuse_holder`; holder pitch widened to 50 mm, lid stop at 83 degrees |
 | drive_replacement | 3 / 9 | seeds 4, 5, 6; see below |
-| others | none | cable_routing (attempted, see below) |
+| cable_routing | 8 / 8 | `experts.cable_routing`; layout changed, see below |
 
 Findings from writing them:
 
@@ -305,3 +305,12 @@ path from the pick-up pose to any bay in seeds 0, 2, 3, 7. That includes bay (2,
 band near the arm's plane, so the band is not the whole story: the configuration used to pick the spare from the stand
 is not connected to the ones that reach the bays. Wrist flips are not allowed (they turn the drive over). Untried: pick
 the spare in a different arm configuration, or set it down and re-grip.
+
+Cable routing, solved by changing the layout (`experts.cable_routing`, 8 / 8 seeds). Gripping the cable and dragging a
+long serpentine cable did not work (above). What works: the cable is a straight 0.40 m, the anchor and the three clips are
+on one line (clip offsets +-2 mm), and the cable starts angled about 0.2 rad away from the row. The policy grips the plug with
+the pads across its width, lifts it to z = 0.12 and pulls to x = 0.745: a taut cable runs above the clip walls. It then lowers the
+plug slowly to the tray (the cable drops into the channels) and pulls 2 cm further along the tray to straighten it; without
+that last pull the cable bows 1.6 cm sideways and misses the last clip. The earlier layout (0.65 m serpentine, clips staggered
++-2 cm) is not solved. Pulling further than x = 0.755 makes the plug slip out of the grip. This is an environment change
+made after the baseline run.
