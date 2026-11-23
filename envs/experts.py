@@ -749,7 +749,11 @@ def fuse_seat_new(env, drv, i, name, verbose=False, tilt=0.5):
         tcp = np.array([FUSE_X - off_xy[0], y - off_xy[1], drv.arm.tcp_pos(d)[2] - step_z])
         coarse = above > 0.015
         ok = pmove_safe(
-            drv, tcp, R, 0.8 if coarse else 0.3, n=4 if coarse else 2,
+            drv,
+            tcp,
+            R,
+            0.8 if coarse else 0.3,
+            n=4 if coarse else 2,
             stop=lambda: env.holder_of.get(name) == i and not setattr(drv, "grip", 0.7),  # open the pads on this step
         )
         if env.holder_of.get(name) != i:
@@ -960,12 +964,12 @@ def drive_pick_spare(env, drv, verbose=False):
 
 
 def drive_insert_spare(env, drv, bay, verbose=False):
-    """EXPERIMENTAL, does not work: carry the gripped spare to bay `bay` and slide it in as far as the pads can follow.
-
-    Known problem: the carry needs the hand to keep one orientation (a drive held by pads rotates about the pad contact
-    as soon as the hand rolls) along a continuous joint path, and the planner finds none from the stand to the bays;
-    a joint-space jump tilts the hand and the drive slips out. See docs/envs.md."""
-    from .tasks.drive_replacement import XF
+    """Carry the gripped spare to bay `bay`, align it by its measured pose (clearance 1.5 mm vertically, 3 mm sideways),
+    slide it in as far as the pads can follow (they are thicker than the clearance, so they stop at the opening),
+    let go,
+    re-grip its front edge (the guides now hold it square), push it further in, and finish with a closed-finger push on
+    its front face. Returns the drive's distance to its seat (m)."""
+    from .tasks.drive_replacement import XF, L
 
     d = env.d
     nb = env.bid["drive_new"]
@@ -981,49 +985,172 @@ def drive_insert_spare(env, drv, bay, verbose=False):
     def tcp_for(drive_pos):
         return np.asarray(drive_pos) - off_w
 
-    mouth = np.array([seat[0] - 0.07, seat[1], seat[2]])  # drive centre 7 cm in front of its seat
+    staging = np.array([XF - L / 2 - 0.03, seat[1], seat[2]])  # the drive's rear end 3 cm before the opening
     pts = [
-        tcp_for([0.50, seat[1], seat[2] + 0.09]),
-        tcp_for([mouth[0] - 0.05, seat[1], seat[2] + 0.015]),
-        tcp_for(mouth),
+        tcp_for([0.45, seat[1], seat[2] + 0.09]),
+        tcp_for([staging[0] - 0.03, seat[1], seat[2] + 0.015]),
+        tcp_for(staging),
     ]
-    # a carried drive needs a continuous path from the first waypoint on (a joint-space jump tilts the hand)
     start = arm.tcp_pos(d).copy()
-    qs, _idx = plan_via(drv, [start, *pts], R_new, n_per=10, big="none", allow_flip=False)
+    # a carried drive needs a continuous path from the first waypoint on (a joint-space jump tilts the hand)
+    qs = None
+    for big in ("none", "first", "any"):  # prefer a continuous path; accept a jump only while the drive is high
+        qs, _idx = plan_via(drv, [start, *pts], R_new, n_per=10, big=big, allow_flip=False)
+        if qs is not None:
+            break
     if qs is None:
         return None
     run_joint_path(drv, qs, 14.0, max_speed=0.6)
     drv.hold(1.5)
 
-    def drive_yaw_now():
-        M = d.xmat[nb].reshape(3, 3)
-        return float(np.arctan2(M[1, 0], M[0, 0]))
+    def attitude():  # yaw and pitch of the drive (x axis of the drive in the world frame)
+        ax = d.xmat[nb].reshape(3, 3)[:, 0]
+        return float(np.arctan2(ax[1], ax[0])), float(np.arctan2(-ax[2], np.hypot(ax[0], ax[1])))
 
-    target = mouth
-    for it in range(8):  # closed loop on the drive's own measured pose: position to ~1 mm, yaw to ~0.5 degrees
-        e = target - d.xpos[nb]
-        yaw = drive_yaw_now()
+    target_tcp = arm.tcp_pos(d).copy()
+    for it in range(14):  # closed loop on the drive's own measured pose, with an integrator: sag is a steady error
+        e = staging - d.xpos[nb]
+        yaw, _pitch = attitude()
         if verbose:
             print(f"    align {it}: error {np.round(e * 1000, 1)} mm, yaw {np.degrees(yaw):.1f} deg")
-        if np.abs(e).max() < 0.0012 and abs(yaw) < np.radians(0.5):
+        if np.abs(e[1:]).max() < 0.0007 and abs(yaw) < np.radians(0.4):
             break
-        c, sn = np.cos(-yaw), np.sin(-yaw)
-        R_t = np.array([[c, -sn, 0.0], [sn, c, 0.0], [0.0, 0.0, 1.0]]) @ d.site_xmat[arm.tcp].reshape(3, 3)
-        # rotating the hand about the drive's centre: keep the drive where it is while its yaw is corrected
-        pmove_safe(drv, arm.tcp_pos(d) + e, R_t, 1.2, n=4, allow_flip=False)
-        drv.hold(0.7)
-    R_new = d.site_xmat[arm.tcp].reshape(3, 3).copy()
-    # slide in until the pad front edge reaches the mouth
-    x_stop = XF - 0.0125  # pad front edge is ~1 cm ahead of the TCP
+        cz, sz = np.cos(-yaw), np.sin(-yaw)
+        Rz = np.array([[cz, -sz, 0.0], [sz, cz, 0.0], [0.0, 0.0, 1.0]])
+        R_t = Rz @ d.site_xmat[arm.tcp].reshape(3, 3)
+        target_tcp = target_tcp + np.array([0.0, e[1], e[2]])
+        pmove_safe(drv, target_tcp, R_t, 1.2, n=4, allow_flip=False)
+        drv.hold(0.8)
+    R_hold = d.site_xmat[arm.tcp].reshape(3, 3).copy()
+
+    def slide(x_tcp_stop, gain=0.6, R=R_hold, ref=lambda: d.xpos[nb], flip=False):
+        """Advance the hand in 1 cm steps to x_tcp_stop, steering y and z from the measured drive pose."""
+        for _ in range(60):
+            e = seat - ref()
+            tcp = arm.tcp_pos(d)
+            if tcp[0] >= x_tcp_stop - 1e-4:
+                break
+            step = np.array([min(tcp[0] + 0.01, x_tcp_stop), tcp[1] + gain * e[1], tcp[2] + gain * e[2]])
+            pmove_safe(drv, step, R, 0.4, n=2, allow_flip=flip)
+            drv.hold(0.1)
+
+    slide(XF - 0.0125)  # pad front edge reaches the opening
+    if verbose:
+        print(f"  pads at the opening: drive error to seat {np.round((seat - d.xpos[nb]) * 1000, 1)} mm")
+    # let go and re-grip the front edge: the guides now hold the drive square
+    drv.hold(0.6, grip=1.0)
+    front_x = d.xpos[nb][0] - L / 2
+    here = arm.tcp_pos(d)
+    pmove_safe(drv, here + np.array([-0.15, 0.0, 0.0]), R_hold, 1.5, n=6, allow_flip=False)
+    at = np.array([front_x + 0.012, seat[1], d.xpos[nb][2]])
+    ok = pmove_safe(drv, at + np.array([-0.08, 0.0, 0.0]), R_hold, 1.5, n=6, allow_flip=False)
+    ok2 = pmove_safe(drv, at, R_hold, 1.0, n=4, allow_flip=False)
+    drv.hold(0.4)
+    gentle_grasp(drv, seconds=1.0, hold=0.4)
+    if verbose:
+        print(f"  re-gripped (planned {ok},{ok2}): tcp {np.round(arm.tcp_pos(d), 3)} drive {np.round(d.xpos[nb], 3)}")
+    slide(XF - 0.0125)
+    if verbose:
+        print(f"  pushed to the opening: drive error to seat {np.round((seat - d.xpos[nb]) * 1000, 1)} mm")
+    # final push with closed fingers on the front face, hand rolled so that the closed pads are the thin way up
+    drv.hold(0.6, grip=1.0)
+    pmove_safe(drv, arm.tcp_pos(d) + np.array([-0.08, 0.0, 0.05]), R_hold, 1.2, n=4, allow_flip=False)
+    drv.hold(0.5, grip=0.0)
+    drv.grip = 0.0
+    front_x = d.xpos[nb][0] - L / 2
+    R_push = _drive_pose(0.0, 0.0)
+    okq = False
+    for yaw_try in DRIVE_YAWS:
+        R_push = _drive_pose(yaw_try, 0.0)
+        okq = pmove_via(
+            drv,
+            [
+                arm.tcp_pos(d) + np.array([0.0, 0.0, 0.05]),
+                np.array([front_x - 0.05, seat[1], seat[2] + 0.03]),
+                np.array([front_x - 0.03, seat[1], seat[2]]),
+            ],
+            R_push,
+            3.0,
+            n_per=6,
+        )
+        if okq:
+            break
+    drv.hold(0.4)
+    R_hold = R_push
+    if verbose:
+        print(f"  push start: planned {okq} tcp {np.round(arm.tcp_pos(d), 4)} drive {np.round(d.xpos[nb], 4)}")
     for _ in range(40):
         e = seat - d.xpos[nb]
-        tcp = arm.tcp_pos(d)
-        if tcp[0] >= x_stop:
+        if e[0] < 0.0005:
             break
-        step = np.array([min(tcp[0] + 0.01, x_stop), tcp[1] + 0.6 * e[1], tcp[2] + 0.6 * e[2]])
-        pmove_safe(drv, step, R_new, 0.4, n=2, allow_flip=False)
+        tcp = arm.tcp_pos(d)
+        step = np.array([tcp[0] + min(0.006, e[0] + 0.004), seat[1], seat[2]])
+        okp = pmove_safe(drv, step, R_hold, 0.4, n=2, allow_flip=False)
         drv.hold(0.1)
-    e = seat - d.xpos[nb]
+        if verbose:
+            print(f"    push: planned {okp} tcp {np.round(arm.tcp_pos(d), 4)} drive x err {e[0] * 1000:.1f} mm")
     if verbose:
-        print(f"  slid in: drive error to seat {np.round(e * 1000, 1)} mm (x), bay_of {env.bay_of.get('drive_new')}")
-    return float(np.linalg.norm(e))
+        print(f"  after the push: drive error to seat {np.round((seat - d.xpos[nb]) * 1000, 1)} mm")
+    return float(np.linalg.norm(seat - d.xpos[nb]))
+
+
+def drive_close_lever(env, drv, verbose=False):
+    """Swing the spare's open lever shut: closed fingertips (hand rolled so the pads are the thin way up) sweep the
+    lever's free end along its arc about the hinge, steering from the measured lever angle, and finish by pressing the
+    lever flat
+    against the drive's front face. Returns the lever angle (rad)."""
+    d, m = env.d, env.m
+    arm = drv.arm
+    lv = m.body("lever_new").id
+    lq = env.lq["drive_new"]
+    nb = env.bid["drive_new"]
+    z = float(d.xpos[nb][2])
+    hinge = d.xpos[lv].copy()
+
+    def pusher(theta):  # fingertip position just behind the lever's free end, on the side it will be pushed from
+        rib = 0.056 * np.array([-np.sin(theta), -np.cos(theta)])
+        tang = np.array([np.cos(theta), -np.sin(theta)])
+        xy = hinge[:2] + rib - tang * 0.016
+        return np.array([xy[0], xy[1], z])
+
+    drv.hold(0.6, grip=1.0)
+    drv.grip = 0.0
+    th = float(d.qpos[lq])
+    start = pusher(th)
+    ok = False
+    for yaw in DRIVE_YAWS:
+        R = _drive_pose(yaw, 0.0)
+        ok = pmove_via(
+            drv,
+            [arm.tcp_pos(d) + np.array([-0.05, 0.0, 0.05]), start + np.array([-0.05, 0.0, 0.07]), start],
+            R,
+            4.0,
+            n_per=6,
+        )
+        if ok:
+            break
+    if not ok:
+        return th
+    for _ in range(40):
+        th = float(d.qpos[lq])
+        if th < 0.05:
+            break
+        goal = pusher(max(th - 0.12, -0.05))
+        pmove_safe(drv, goal, R, 0.5, n=2, allow_flip=False)
+        drv.hold(0.15)
+        if verbose:
+            print(f"    lever {th:.2f} rad, tcp {np.round(arm.tcp_pos(d), 3)}")
+    drv.hold(0.6)
+    return float(d.qpos[lq])
+
+
+def drive_replacement(env, verbose=False):
+    """Press the failed drive's release button, pull it out by its lever, pick up the spare, slide it into the bay,
+    and swing its lever shut. Returns env.evaluate()."""
+    drv = Driver(env)
+    fd = env.fail_drive
+    if drive_press_button(env, drv, fd) and drive_pull_out(env, drv, fd) and drive_pick_spare(env, drv):
+        drive_insert_spare(env, drv, env.fail_bay, verbose=verbose)
+        drive_close_lever(env, drv, verbose=verbose)
+        drv.hold(1.0, grip=1.0)
+    return env.evaluate()

@@ -98,7 +98,7 @@ figure.g figcaption{font-size:14px;line-height:1.4}
 </div>
 <p class="small">Action is the vector length per step. Steps/s is with rendering on the dev laptop (50 is real time).</p>
 <h2 id="scripted">Scripted policies</h2>
-<p>Reference solutions for 9 of the 11 tasks. They use inverse kinematics and privileged simulator state, except the patrol, which works from the thermal image only. They show a task is solvable and are the source for demonstration data. Videos are at 2x speed.</p>
+<p>Reference solutions for 10 of the 11 tasks. They use inverse kinematics and privileged simulator state, except the patrol, which works from the thermal image only. They show a task is solvable and are the source for demonstration data. Videos are at 2x speed.</p>
 <div class="grid">
 <figure class="g"><video controls loop muted playsinline preload="metadata" src="video/scripted_cable_insertion.mp4"></video><figcaption>Cable insertion. Plug latched in the port.</figcaption></figure>
 <figure class="g"><video controls loop muted playsinline preload="metadata" src="video/scripted_parts_sorting.mp4"></video><figcaption>Parts sorting. Nine parts into the compartments that match the labels.</figcaption></figure>
@@ -106,6 +106,7 @@ figure.g figcaption{font-size:14px;line-height:1.4}
 <figure class="g"><video controls loop muted playsinline preload="metadata" src="video/scripted_pouring_beads.mp4"></video><figcaption>Pouring beads. 100 of 100 beads in the bowl, cup returned.</figcaption></figure>
 <figure class="g"><video controls loop muted playsinline preload="metadata" src="video/scripted_relative_placement.mp4"></video><figcaption>Relative placement. Toy block placed on the commanded object.</figcaption></figure>
 <figure class="g"><video controls loop muted playsinline preload="metadata" src="video/scripted_fuse_holder.mp4"></video><figcaption>Fuse holder. Lid pulled open, blown fuse into the scrap bin, fresh fuse seated, lid closed.</figcaption></figure>
+<figure class="g"><video controls loop muted playsinline preload="metadata" src="video/scripted_drive_replacement.mp4"></video><figcaption>Drive replacement (seed 4). Release button pressed, failed drive pulled out by its lever, spare carried to the bay and pushed in, lever swung shut. Works on 3 of 9 seeds.</figcaption></figure>
 <figure class="g"><video controls loop muted playsinline preload="metadata" src="video/scripted_plate_racking.mp4"></video><figcaption>Plate racking. Plate stood on edge in the commanded slot, between tines with 1.5 mm clearance.</figcaption></figure>
 <figure class="g"><video controls loop muted playsinline preload="metadata" src="video/scripted_object_handoff.mp4"></video><figcaption>Handoff. Left arm to right arm, bar set upright on the pad.</figcaption></figure>
 <figure class="g" style="grid-column:1/-1"><video controls loop muted playsinline preload="metadata" src="video/scripted_thermal_patrol.mp4"></video><figcaption>Thermal patrol. Overview camera and thermal camera. Every hot server flagged.</figcaption></figure>
@@ -121,7 +122,7 @@ figure.g figcaption{font-size:14px;line-height:1.4}
   <tr><td>Relative placement</td><td class="n">8 / 12</td><td>Misses are mostly the bowl and the tall box</td></tr>
   <tr><td>Pouring beads</td><td class="n">5 / 8</td><td>Beads always reach the bowl. Misses are the cup not ending up upright and released</td></tr>
   <tr><td>Fuse holder</td><td class="n">12 / 12</td><td>All four holders. Includes closing the lid and leaving the neighbouring fuses latched</td></tr>
-  <tr><td>Drive replacement</td><td class="n">0 / 6</td><td>Partial. Over 6 seeds: lever unlocked 6, old drive pulled out 6, spare picked up 5. Inserting the spare is not solved: the carry needs a fixed hand orientation and the planner finds no continuous path to the bays</td></tr>
+  <tr><td>Drive replacement</td><td class="n">3 / 9</td><td>Seeds 4, 5, 6 succeed end to end. On the others the carry planner finds no continuous path to the bay (columns 0 to 2), and once the spare pick-up failed</td></tr>
   <tr><td>Cable routing</td><td class="n">none</td><td>No scripted policy yet. Cable routing was attempted: a 6 mm cable cannot be gripped flat on the tray, and the plug slips when it drags the cable</td></tr>
 </table>
 

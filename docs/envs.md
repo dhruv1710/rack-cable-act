@@ -179,7 +179,7 @@ and writes an mp4 per successful episode to `out/scripted/`.
 | relative_placement | 8 / 12 | `tests/pick_place.py`; misses are mostly the bowl and the tall box. A rewrite on planned paths scored 6 / 12 and was dropped |
 | pouring_beads | 5 / 8 | `experts.pouring_beads`; beads always reach the bowl, the misses are the cup return |
 | fuse_holder | 12 / 12 | `experts.fuse_holder`; holder pitch widened to 50 mm, lid stop at 83 degrees |
-| drive_replacement | 0 / 6 | partial, see below |
+| drive_replacement | 3 / 9 | seeds 4, 5, 6; see below |
 | others | none | cable_routing (attempted, see below) |
 
 Findings from writing them:
@@ -269,3 +269,10 @@ spare is picked up from its stand 5 / 6. Inserting the spare is not solved (`dri
   Even with a good carry the drive's 1.5 mm vertical clearance is thinner than the pads, so the last 2.4 cm needs a second
   tool (a fingertip push), then the lever has to be swung shut to latch it. Moving the spare stand in front of the bays
   would probably remove the carry problem.
+
+Update: `drive_replacement` now runs end to end (`experts.drive_replacement`). Insertion aligns the carried drive on its
+measured pose (position integrator plus yaw correction; a pitch correction diverged and was dropped), slides it in as far as
+the vertical pads fit, re-grips the front edge, and finishes with a closed-finger push (hand rolled so the pads are the thin
+way up, since the vertical pads stall 2 cm short of the seat). `drive_close_lever` sweeps the open lever shut along its arc.
+Success 3 / 9 (seeds 4, 5, 6). The other seeds fail in carry planning (no continuous orientation-constant path to bays in
+columns 0 to 2; allowing a joint jump did not help), and seed 1 failed at the spare pick-up.

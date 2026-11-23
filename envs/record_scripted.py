@@ -22,6 +22,7 @@ import envs
 
 from .experts import (
     bottle_binning,
+    drive_replacement,
     fuse_holder,
     object_handoff,
     parts_sorting,
@@ -44,6 +45,7 @@ POLICIES = {
     "thermal_patrol": thermal_patrol,
     "plate_racking": lambda env: plate_racking(env)[0],
     "fuse_holder": fuse_holder,
+    "drive_replacement": drive_replacement,
 }
 
 
@@ -56,10 +58,10 @@ def frame_of(task: str, obs: dict) -> np.ndarray:
     return img
 
 
-def run(task: str, n: int, record_all: bool = False) -> dict:
+def run(task: str, n: int, record_all: bool = False, seeds=None) -> dict:
     OUT.mkdir(parents=True, exist_ok=True)
     wins, rows = 0, []
-    for seed in range(n):
+    for seed in seeds if seeds is not None else range(n):
         env = envs.make(task, img_hw=IMG_HW)
         env.reset(seed=seed)
         frames, step = [], env.step

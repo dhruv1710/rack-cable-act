@@ -145,8 +145,15 @@ def main() -> None:
             f"inferences={n_infer} mean_latency={t_infer / max(n_infer, 1) * 1000:.0f} ms"
         )
         if args.json:
-            rec = {"task": args.task, "seed": args.seed + ep, "success": ok, "progress": float(info.get("progress", 0)),
-                   "sim_seconds": len(frames) / CONTROL_HZ, "inferences": n_infer, "prompt": prompt}
+            rec = {
+                "task": args.task,
+                "seed": args.seed + ep,
+                "success": ok,
+                "progress": float(info.get("progress", 0)),
+                "sim_seconds": len(frames) / CONTROL_HZ,
+                "inferences": n_infer,
+                "prompt": prompt,
+            }
             with open(args.json, "a") as f:
                 f.write(json.dumps(rec) + "\n")
         save_video(frames, Path(args.out) / f"{args.task}_seed{args.seed + ep}", fps=30)
