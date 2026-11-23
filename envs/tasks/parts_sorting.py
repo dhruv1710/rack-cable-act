@@ -78,7 +78,8 @@ class PartsSorting(TaskEnv):
 
     @staticmethod
     def _add_part_geoms(spec, b, t, visual, suffix):
-        kw = {"contype": 0, "conaffinity": 0} if visual else {"friction": (0.9, 0.01, 0.001)}
+        # rolling friction only acts with condim 6; without it a lying cylinder rolls on forever
+        kw = {"contype": 0, "conaffinity": 0} if visual else {"friction": (0.9, 0.01, 0.001), "condim": 6}
         if t == "bolt":  # axis along body z: shank below the head
             b.add_geom(
                 name=f"{suffix}_shank",

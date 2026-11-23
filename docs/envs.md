@@ -174,7 +174,7 @@ and writes an mp4 per successful episode to `out/scripted/`.
 | thermal_patrol | 6 / 6 | perception-guided: thermal image only, no hot-server list |
 | plate_racking | 10 / 10 | slots 2 to 4 came up in these seeds |
 | object_handoff | 10 / 10 | 20 cm bar; `experts.object_handoff` |
-| parts_sorting | 8 / 12 | misses are single parts |
+| parts_sorting | 16 / 24 | misses are one or two bolts landing short or beside their compartment |
 | bottle_binning | 10 / 12 | both misses lose one bottle to the floor (seeds 3, 4) |
 | relative_placement | 8 / 12 | `tests/pick_place.py`; misses are mostly the bowl and the tall box. A rewrite on planned paths scored 6 / 12 and was dropped |
 | pouring_beads | 21 / 24 | `experts.pouring_beads`; beads always reach the bowl, the 3 misses are the cup tipping over on the return descent |
@@ -285,3 +285,10 @@ Bottle binning fixes (8 / 12 to 10 / 12): a lying bottle's body origin is at its
 length along its axis (before, the pads closed on the bottle's end and squeezed it out on the lift). A 19.5 cm lying bottle
 dropped into the 2 x 2 slots landed across its neighbours, so lying bottles now get their own lane along the crate's long
 axis and the standing bottles use the other lane. The two remaining misses (seeds 3, 4) each knock one bottle off the belt.
+
+Parts sorting (8 / 12 on seeds 0 to 11 was a lucky range; the original policy scores 13 / 24 on seeds 0 to 23). A lying
+standoff touching only the bench kept rolling for tens of centimetres, so the last standoffs were swept across the bench
+before they were picked. MuJoCo applies rolling friction only with `condim=6`, and the part geoms used the default 3.
+Setting `condim=6` on the bolt shank and the standoff gives 16 / 24 (seeds 0 to 23). Dropping deeper into the
+compartments changed nothing. Remaining misses are bolts that land 5 to 8 cm short of their slot or in a neighbouring
+compartment; the cause is not established. This is an environment change made after the baseline run.

@@ -117,7 +117,7 @@ figure.g figcaption{font-size:14px;line-height:1.4}
   <tr><td>Thermal patrol</td><td class="n">6 / 6</td><td>Thermal image only. Success allows at most 1 false flag</td></tr>
   <tr><td>Plate racking</td><td class="n">10 / 10</td><td>Target slots 2 to 4 came up in these seeds</td></tr>
   <tr><td>Handoff</td><td class="n">10 / 10</td><td>Random bar position and yaw</td></tr>
-  <tr><td>Parts sorting</td><td class="n">8 / 12</td><td>Misses are one part, usually a small cylinder</td></tr>
+  <tr><td>Parts sorting</td><td class="n">16 / 24</td><td>Misses are one or two bolts that land short of or beside their compartment</td></tr>
   <tr><td>Bottle binning</td><td class="n">10 / 12</td><td>Both misses lose one bottle off the belt onto the floor</td></tr>
   <tr><td>Relative placement</td><td class="n">8 / 12</td><td>Misses are mostly the bowl and the tall box</td></tr>
   <tr><td>Pouring beads</td><td class="n">21 / 24</td><td>Beads always reach the bowl. The 3 misses are the cup tipping over on the way back down</td></tr>
@@ -192,7 +192,7 @@ obs, r, terminated, truncated, info = env.step(env.noop_action())</pre>
   <li>Progress is mostly the starting layout. A motionless arm scores 0.52 on relative placement.</li>
   <li>Prompts were the environments' own instructions, not simplified.</li>
   <li>The velocity-to-target scale is untested.</li>
-  <li>Five environments were changed after the baseline ran: bottle binning (bottles overlapped), plate racking (source and rack moved to the same side of the arm), cable routing (the cable was too short for the clip layout), fuse holder (its lids tipped open by themselves, and the holders were too close together for the hand) and the handoff bar (now 20 cm). The baseline used the earlier versions.</li>
+  <li>Six environments were changed after the baseline ran: parts sorting (rolling friction on the bolts and standoffs), bottle binning (bottles overlapped), plate racking (source and rack moved to the same side of the arm), cable routing (the cable was too short for the clip layout), fuse holder (its lids tipped open by themselves, and the holders were too close together for the hand) and the handoff bar (now 20 cm). The baseline used the earlier versions.</li>
 </ul>
 <div class="grid three">
 <figure class="g"><video controls loop muted playsinline preload="metadata" src="video/cable_insertion.mp4"></video><figcaption>Cable insertion</figcaption></figure>
