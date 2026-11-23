@@ -135,10 +135,13 @@ class CableRouting(TaskEnv):
             m.body_pos[b] = (p[0], y, p[2])
         ay = ANCHOR[1] + (rng.uniform(-0.02, 0.02) if self.randomize else 0.0)
         m.body_pos[self.root_bid] = (ANCHOR[0], ay, self._root_pos0[2])
-        # initial cable layout: gentle sideways S-curve that stays off the clip row
-        bend = rng.uniform(-0.05, 0.05) if self.randomize else 0.0
+        # initial cable layout: a gentle serpentine beside the clip row, as a loosely laid patch cable is. The 0.65 m
+        # cable is too long to lie straight on the tray (the plug would be beyond the arm's reach), so it waves along x.
+        amp = rng.uniform(1.1, 1.3) if self.randomize else 1.2
+        prev = 0.0
         for k, q in enumerate(self.jq):
-            ang = bend * np.sin(k / 6.0)
+            phi = amp * np.sin(2 * np.pi * (k + 1) / 18.0)  # heading of segment k relative to +x
+            ang, prev = phi - prev, phi
             d.qpos[q : q + 4] = [np.cos(ang / 2), 0, 0, np.sin(ang / 2)]
 
     # ---- evaluation

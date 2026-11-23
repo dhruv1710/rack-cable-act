@@ -178,7 +178,7 @@ and writes an mp4 per successful episode to `out/scripted/`.
 | bottle_binning | 8 / 12 | misses are one bottle short |
 | relative_placement | 8 / 12 | `tests/pick_place.py`; misses are mostly the bowl and the tall box. A rewrite on planned paths scored 6 / 12 and was dropped |
 | pouring_beads | 5 / 8 | `experts.pouring_beads`; beads always reach the bowl, the misses are the cup return |
-| others | none | cable_routing, fuse_holder, drive_replacement |
+| others | none | cable_routing, fuse_holder, drive_replacement (cable routing attempted, see below) |
 
 Findings from writing them:
 
@@ -216,7 +216,16 @@ before this change, on the earlier layout.
 - **Object handoff:** the bar is 20 cm tall (was 15 cm): a vertical hand grips only the top few centimetres and the
   horizontal hand needs its grasp point 12 cm up when it sets the bar down.
 - **Cable routing:** the clips were staggered 7 cm sideways, so the path anchor, clip 0, 1, 2 and plug was about 0.62 m
-  against a 0.54 m cable. The stagger is now 2 cm and the cable 0.65 m. No policy has been written for it, so the fix is
-  checked by length only.
+  against a 0.54 m cable. The stagger is now 2 cm and the cable 0.65 m. A 0.65 m cable lying straight put the plug
+  beyond the arm's reach (x = 0.97; the original 0.5 m cable also reached x = 0.86), so it now starts as a serpentine
+  beside the clip row (plug at x = 0.74 to 0.77).
+
+Cable routing, attempted and not solved:
+
+- Gripping the 6 mm cable on the tray fails: the vertical hand's pads cannot get below the cable's centreline without
+  touching the tray, so they close on nothing and the cable stays where it is.
+- Handling the plug only (grip it, carry it along the clip row above the walls, lower it beyond the last clip) does not
+  work either: the plug slips out of the grip as it drags the long cable, and it is 13.6 mm wide, wider than the 12.5 mm
+  channels, so it has to go over them. Routing needs the cable pulled taut after it is threaded, which was not found.
 
 The pi0.5 baseline ran before these changes, on the earlier layouts.
