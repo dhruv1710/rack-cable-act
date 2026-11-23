@@ -630,8 +630,9 @@ def pouring_beads(env, verbose=False, tilt_max=2.35, back=0.03, z_over=0.15):
     pmove(drv, up, Rt, 1.8, n=8)  # rise clear of the bowl while still tipped
     for k in range(7, -1, -1):  # untilt in the air
         pmove(drv, up, rot_y(tilt_max * k / 8) @ R0, 0.5, n=3)
-    pmove(drv, np.array([c[0], c[1], 0.20]), R0, 2.0, n=12)
-    pmove(drv, np.array([c[0], c[1], 0.058]), R0, 1.5, n=8)
+    pmove(drv, np.array([c[0], c[1], 0.20]), R0, 2.0, n=12, allow_flip=False)
+    drv.hold(0.6)  # let the cup stop swinging in the grip
+    pmove(drv, np.array([c[0], c[1], 0.058]), R0, 3.0, n=16, allow_flip=False)
     drv.hold(0.5)
     drv.hold(0.8, grip=0.6)  # loosen so the cup seats on the table before letting go
     drv.release(0.6)

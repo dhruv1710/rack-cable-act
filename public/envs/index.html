@@ -120,7 +120,7 @@ figure.g figcaption{font-size:14px;line-height:1.4}
   <tr><td>Parts sorting</td><td class="n">8 / 12</td><td>Misses are one part, usually a small cylinder</td></tr>
   <tr><td>Bottle binning</td><td class="n">8 / 12</td><td>Misses are one bottle short</td></tr>
   <tr><td>Relative placement</td><td class="n">8 / 12</td><td>Misses are mostly the bowl and the tall box</td></tr>
-  <tr><td>Pouring beads</td><td class="n">5 / 8</td><td>Beads always reach the bowl. Misses are the cup not ending up upright and released</td></tr>
+  <tr><td>Pouring beads</td><td class="n">21 / 24</td><td>Beads always reach the bowl. The 3 misses are the cup tipping over on the way back down</td></tr>
   <tr><td>Fuse holder</td><td class="n">12 / 12</td><td>All four holders. Includes closing the lid and leaving the neighbouring fuses latched</td></tr>
   <tr><td>Drive replacement</td><td class="n">3 / 9</td><td>Seeds 4, 5, 6 succeed end to end. On the others the carry planner finds no continuous path to the bay (columns 0 to 2), and once the spare pick-up failed</td></tr>
   <tr><td>Cable routing</td><td class="n">none</td><td>No scripted policy yet. Cable routing was attempted: a 6 mm cable cannot be gripped flat on the tray, and the plug slips when it drags the cable</td></tr>
@@ -168,7 +168,7 @@ obs, r, terminated, truncated, info = env.step(env.noop_action())</pre>
   <tr><td>Drive mechanism under applied forces</td><td class="n">10 / 10</td></tr>
   <tr><td>Scripted grasp and lift of key objects</td><td class="n">16 / 16</td></tr>
   <tr><td>Scripted bimanual handoff</td><td class="n">10 / 10</td></tr>
-  <tr><td>Scripted pour</td><td class="n">5 / 8</td></tr>
+  <tr><td>Scripted pour</td><td class="n">21 / 24</td></tr>
   <tr><td>Scripted pick-and-place, relative placement</td><td class="n">8 / 12</td></tr>
 </table>
 <p class="small">Scripted runs use inverse kinematics on a planned joint path and no collision avoidance. They are reference solutions, not learned policies.</p>

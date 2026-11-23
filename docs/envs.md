@@ -177,7 +177,7 @@ and writes an mp4 per successful episode to `out/scripted/`.
 | parts_sorting | 8 / 12 | misses are single parts |
 | bottle_binning | 8 / 12 | misses are one bottle short |
 | relative_placement | 8 / 12 | `tests/pick_place.py`; misses are mostly the bowl and the tall box. A rewrite on planned paths scored 6 / 12 and was dropped |
-| pouring_beads | 5 / 8 | `experts.pouring_beads`; beads always reach the bowl, the misses are the cup return |
+| pouring_beads | 21 / 24 | `experts.pouring_beads`; beads always reach the bowl, the 3 misses are the cup tipping over on the return descent |
 | fuse_holder | 12 / 12 | `experts.fuse_holder`; holder pitch widened to 50 mm, lid stop at 83 degrees |
 | drive_replacement | 3 / 9 | seeds 4, 5, 6; see below |
 | others | none | cable_routing (attempted, see below) |
@@ -276,3 +276,7 @@ the vertical pads fit, re-grips the front edge, and finishes with a closed-finge
 way up, since the vertical pads stall 2 cm short of the seat). `drive_close_lever` sweeps the open lever shut along its arc.
 Success 3 / 9 (seeds 4, 5, 6). The other seeds fail in carry planning (no continuous orientation-constant path to bays in
 columns 0 to 2; allowing a joint jump did not help), and seed 1 failed at the spare pick-up.
+
+Pouring fix: the cup swung in the grip after the pour and tipped over during the descent back to the table (it slid into the
+robot base). Settling for 0.6 s, planning the return without wrist flips and descending in 16 waypoints over 3 s raised the
+scripted pour from 5 / 8 to 21 / 24 (seeds 0 to 23). Beads reached the bowl 24 / 24.
