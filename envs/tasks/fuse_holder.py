@@ -18,8 +18,8 @@ from ..common.geom import CYL, box, cyl, hollow_cylinder
 
 PLATE_X, X_F, X_B = 0.700, 0.6465, 0.6925  # plate front face, holder front, holder back
 RAIL_Z, ZB, ZT = 0.17, 0.13, 0.21  # rail centre, holder bottom, holder top
-PITCH = 0.034
-YS = np.array([0.051, 0.017, -0.017, -0.051])  # holder 1 is on the robot's left (+y)
+PITCH = 0.050  # holders are spaced out: the Panda hand body (6 cm wide) must not touch the neighbours' tabs and fuses
+YS = np.array([0.075, 0.025, -0.025, -0.075])  # holder 1 is on the robot's left (+y)
 FUSE_X = 0.664
 CRADLE_TOP = ZB + 0.006
 SEAT_Z = CRADLE_TOP + 0.019  # fuse centre height when seated
@@ -98,7 +98,7 @@ class FuseHolder(TaskEnv):
                 name=f"lid{i}_hinge",
                 type=mujoco.mjtJoint.mjJNT_HINGE,
                 axis=(0, -1, 0),
-                range=(0, 1.75),
+                range=(0, 1.45),  # stops at ~83 deg: a horizontal push on its front face closes it
                 damping=0.004,
                 frictionloss=0.0005,  # light hinge: once the detent lets go, the lid swings fully open under its weight
             )
@@ -212,7 +212,7 @@ class FuseHolder(TaskEnv):
                 ang = d.qpos[self.lid_q[i]]
                 if ang > 0.3:
                     self.lid_armed[i] = True  # it has really been opened: it may latch again when pushed shut
-                elif self.lid_armed[i] and ang < 0.04 and abs(d.qvel[self.lid_dof[i]]) < 0.3:
+                elif self.lid_armed[i] and -0.03 < ang < 0.04 and abs(d.qvel[self.lid_dof[i]]) < 0.3:
                     latch.engage(m, d, eq, self.lid_bid[i])
                     self.lid_armed[i] = False
         for n in self.fuse_names:

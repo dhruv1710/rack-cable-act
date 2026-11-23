@@ -709,12 +709,12 @@ def fuse_seat_new(env, drv, i, name, verbose=False, tilt=0.5):
     d = env.d
     p = d.xpos[env.fuse_bid[name]].copy()
     R = down_rot(0.0)
-    pmove(drv, np.array([p[0], p[1], 0.17]), R, 3.0, n=12, big="first")
-    drv.hold(0.3, grip=1.0)
+    # come in from high above: a straight swing from the scrap bin can sweep through the caddy
+    pmove_via(drv, [np.array([p[0], p[1], 0.32]), np.array([p[0], p[1], 0.17])], R, 4.5, n_per=6)
+    drv.hold(0.3, grip=0.6)  # ~3 cm open: the caddy slots are 5 cm apart and a fully open hand touches the next fuse
     pmove(drv, np.array([p[0], p[1], p[2] + 0.01]), R, 1.5, n=8)
     drv.hold(0.3)
     gentle_grasp(drv, seconds=0.8, hold=0.4)
-    held_dz = d.xpos[env.fuse_bid[name]][2] - drv.arm.tcp_pos(d)[2]  # fuse centre relative to the pads
     pmove(drv, np.array([p[0], p[1], 0.17]), R, 1.2, n=8)
     y = YS[i]
     # the wrist is 6 cm wide and would hit the mounting plate behind the holders: lean the hand (fingers toward the
@@ -725,62 +725,55 @@ def fuse_seat_new(env, drv, i, name, verbose=False, tilt=0.5):
     pmove_safe(drv, top, R, 3.0, n=14)
     drv.hold(0.4)
     # centre the fuse (not the hand) over the seat, then lower in steps
-    z_seat_tcp = SEAT_Z - held_dz
-    z_sched = [
-        *np.linspace(0.27, z_seat_tcp + 0.012, 10)[1:],
-        *np.arange(z_seat_tcp + 0.010, z_seat_tcp - 0.0035, -0.001),
-    ]
-    for zz in z_sched:  # coarse, then 1 mm steps so it stops as soon as the clip latches
+    for _ in range(60):
+        fz = d.xpos[env.fuse_bid[name]][2]
+        above = fz - SEAT_Z  # measured: the fuse slides in the pads during the carry
+        if above < 0.0005:
+            break
+        step_z = 0.010 if above > 0.015 else min(0.001, above)
         off_xy = d.xpos[env.fuse_bid[name]][:2] - drv.arm.tcp_pos(d)[:2]  # fuse relative to the pads, measured
-        tcp = np.array([FUSE_X - off_xy[0], y - off_xy[1], zz])
+        tcp = np.array([FUSE_X - off_xy[0], y - off_xy[1], drv.arm.tcp_pos(d)[2] - step_z])
+        coarse = above > 0.015
         ok = pmove_safe(
-            drv, tcp, R, 0.8 if zz > z_seat_tcp + 0.012 else 0.3, n=4 if zz > z_seat_tcp + 0.012 else 2,
-            stop=lambda: env.holder_of.get(name) == i,
+            drv, tcp, R, 0.8 if coarse else 0.3, n=4 if coarse else 2,
+            stop=lambda: env.holder_of.get(name) == i and not setattr(drv, "grip", 0.7),  # open the pads on this step
         )
         if env.holder_of.get(name) != i:
             drv.hold(0.15)
         if env.holder_of.get(name) == i:
-            drv.release(0.4)  # latched: let go at once (more than ~6 N on the clip frees it again)
+            drv.hold(0.5, grip=0.7)  # latched: let go at once, ~4 cm open (neighbours are 5 cm away)
             break
         if verbose:
             q = d.xpos[env.fuse_bid[name]]
-            print(f"    z {zz:.3f}: ok {ok} fuse xy err {np.round((q[:2] - [FUSE_X, y]) * 1000, 1)} mm z {q[2]:.3f}")
-            pairs = {
-                (env.m.body(env.m.geom_bodyid[c.geom1]).name, env.m.body(env.m.geom_bodyid[c.geom2]).name)
-                for c in d.contact[: d.ncon]
-            }
-            print("      contacts:", sorted(p_ for p_ in pairs if any("panda" in n_ for n_ in p_))[:6],
-                  "fuse axis z", round(float(d.xmat[env.fuse_bid[name]].reshape(3, 3)[2, 2]), 3))
+            err = np.round((q[:2] - [FUSE_X, y]) * 1000, 1)
+            print(f"    fuse {above * 1000:.1f} mm above seat: ok {ok} xy err {err} mm")
     drv.hold(0.5)
     if verbose:
         q = d.xpos[env.fuse_bid[name]]
         seat = np.round([FUSE_X, y, SEAT_Z], 4)
         print(f"  lowered: fuse {np.round(q, 4)} seat {seat} latched {env.holder_of.get(name)}")
-    drv.release(0.6)
-    drv.hold(0.8)
+    drv.hold(0.8, grip=0.7)  # ~4 cm open: fully open, the fingers would reach the neighbouring fuses
+    drv.hold(0.5)
     pmove_safe(drv, np.array([FUSE_X, y, 0.27]), R, 1.5, n=6)
     drv.hold(0.5)
     return env.holder_of.get(name) == i
 
 
 def fuse_close_lid(env, drv, i, verbose=False):
-    """EXPERIMENTAL: does not close the lid reliably (see docs/envs.md).
-
-    Idea: closed fingertips under the hanging lid, following the arc about its hinge upward until the lid reaches its
-    stop, where the detent latches it. The lid gets pushed to about 0.4 rad, then falls back."""
+    """Swing holder i's lid shut: closed fingertips under the hanging lid, following the arc about its hinge upward (the
+    pad starts well below the plate and closes up on it), then a firm horizontal push until the detent latches it."""
     from .tasks.fuse_holder import X_F, YS, ZB
 
     d = env.d
     y, R = YS[i], _fuse_pose(0.0, np.pi / 2)
     hx, hz, off = X_F - 0.002, ZB, 0.006
 
-    def pad_at(theta):  # fingertip position under the lid's underside at hinge angle theta
-        # contact radius from the hinge: out near the end while the lid hangs, down to 5 cm as it closes (the hand must
-        # stay under the neighbouring lids' tabs, which start at z = 0.206)
-        r_push = 0.052 + 0.020 * np.clip(theta / 0.9, 0.0, 1.0)
-        p = np.array([hx - r_push * np.sin(theta), hz + r_push * np.cos(theta)])
+    def pad_at(theta):  # fingertip position under the lid's front face at hinge angle theta
+        # start well below the hanging plate (the pad block is ~1.6 cm thick), then close up on its surface as it lifts
+        gap = off + 0.010 * np.clip((theta - 0.9) / 0.55, 0.0, 1.0)
+        p = np.array([hx - 0.072 * np.sin(theta), hz + 0.072 * np.cos(theta)])
         n = np.array([-np.cos(theta), -np.sin(theta)])  # outward normal of the lid's front face
-        return p + off * n
+        return p + gap * n
 
     thetas = np.linspace(float(d.qpos[env.lid_q[i]]), 0.0, 14)  # from where the lid actually hangs
     arc = [pad_at(th) for th in thetas]
@@ -803,26 +796,29 @@ def fuse_close_lid(env, drv, i, verbose=False):
     if R is None:
         return float(d.qpos[env.lid_q[i]])
     # the pad is a thick block: finish with a firm horizontal push at the lid's front face, up to the stop
-    for xp, zp in ((0.62, 0.183), (0.628, 0.184), (0.634, 0.185)):
+    for xp, zp in ((0.618, 0.195), (0.624, 0.196), (0.628, 0.197)):
         pmove_safe(drv, np.array([xp, y, zp]), R, 1.5, n=4)
         if d.eq_active[env.lid_eq[i]]:
             break
-    drv.hold(1.0)
+    for _ in range(6):  # keep pressing until the detent has latched (it needs the lid shut and slow)
+        if d.eq_active[env.lid_eq[i]]:
+            break
+        drv.hold(0.5)
+    drv.hold(0.5)
     pmove_safe(drv, np.array([hx - 0.12, y, hz + 0.10]), R, 1.5, n=8)
     drv.hold(1.5)
     return float(d.qpos[env.lid_q[i]])
 
 
 def fuse_holder(env, verbose=False):
-    """Replace the blown fuse: open the lid, pull the old fuse into the scrap bin, seat a fresh fuse. The last step of
-    the task, closing the lid, is not solved: fuse_close_lid does not close it, so this does not succeed."""
-    from .common.arms import forward_rot  # noqa: F401
-
+    """Replace the blown fuse: open the lid, pull the old fuse into the scrap bin, seat a fresh fuse, close the lid."""
     drv = Driver(env)
     t = env.target
     old = env.holder_fuse[t]
+    # any fresh fuse will do: take the one furthest from the arm's swing to the holders (the wrist sweeps the near slot)
+    new = min((n for n in env.fuse_names if n.startswith("fuse_new")), key=lambda n: env.d.xpos[env.fuse_bid[n]][1])
     fuse_open_lid(env, drv, t, verbose=verbose)
     fuse_pull_to_bin(env, drv, t, old, verbose=verbose)
-    fuse_seat_new(env, drv, t, "fuse_new0", tilt=0.12, verbose=verbose)
+    fuse_seat_new(env, drv, t, new, tilt=0.12, verbose=verbose)
     fuse_close_lid(env, drv, t, verbose=verbose)
     return env.evaluate()

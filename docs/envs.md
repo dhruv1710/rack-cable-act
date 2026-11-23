@@ -178,7 +178,7 @@ and writes an mp4 per successful episode to `out/scripted/`.
 | bottle_binning | 8 / 12 | misses are one bottle short |
 | relative_placement | 8 / 12 | `tests/pick_place.py`; misses are mostly the bowl and the tall box. A rewrite on planned paths scored 6 / 12 and was dropped |
 | pouring_beads | 5 / 8 | `experts.pouring_beads`; beads always reach the bowl, the misses are the cup return |
-| fuse_holder | 0 / 8 | partial, see below |
+| fuse_holder | 12 / 12 | `experts.fuse_holder`; holder pitch widened to 50 mm, lid stop at 83 degrees |
 | others | none | cable_routing (attempted, see below), drive_replacement |
 
 Findings from writing them:
@@ -231,17 +231,23 @@ Cable routing, attempted and not solved:
 
 The pi0.5 baseline ran before these changes, on the earlier layouts.
 
-Fuse holder, partial (`experts.fuse_holder`, over 8 seeds): the lid opens 8 / 8, the blown fuse is pulled out and put in the
-scrap bin 8 / 8, the fresh fuse seats and latches 6 / 8. It never completes the task:
+Fuse holder (`experts.fuse_holder`, 12 / 12 seeds, all four holders): pinch the lid tab and pull it open, grip the blown
+fuse above the 15 mm cradle walls and lift it out of the clip into the scrap bin, pick the fresh fuse that is furthest
+from the arm's swing (the wrist sweeps the near caddy slot), lower it into the cradle and open the pads the instant the
+clip latches, then close the lid. What it took:
 
-- Closing the lid is not solved. Closed fingertips follow the lid's arc upward and push it to about 0.4 rad, then it falls
-  back before reaching the stop; the hand body catches the neighbouring lids' tabs before the last push.
-- Seating the fresh fuse needs a vertical hand tilted about 7 degrees (the wrist would hit the mounting plate behind the
-  holders), and its 20 cm palm brushes the neighbouring holders: their fuses are left latched in 0 / 8 runs.
-- How it works: the lid is opened by pinching its tab with a half-open horizontal hand (pad gap about 16 mm) and pulling
-  toward the robot; the blown fuse is gripped above the 15 mm cradle walls and lifted out; the fresh fuse is lowered in
-  1 mm steps and the gripper opens the moment the clip latches (more than 6 N on the clip frees it again).
+- The lid is opened by pinching its tab with a half-open horizontal hand (pad gap about 16 mm) and pulling toward the
+  robot. The lid is balanced over its hinge, so gravity finishes opening it once the detent lets go.
+- Seating needs a vertical hand tilted about 7 degrees (the wrist would hit the mounting plate behind the holders). The
+  fuse is lowered in 1 mm steps from its *measured* height (it slides in the pads during the carry, and driving past the
+  seat pushes it through the 6 mm floor), and the gripper starts opening on the same control step the clip latches: the
+  weld frees the clip above 6 N, so any hand motion with the pads still closed breaks it.
+- The fingers must not be fully open near the neighbours: 5 cm apart, a fully open hand (+-4 cm) reaches the next fuse.
+- Closing: the lid hangs 83 degrees open. The pad starts 16 mm below the plate (the pad block is 1.6 cm thick), follows the
+  lid's arc upward while closing up on its surface, then a firm horizontal push; the detent only latches inside its
+  valid range (it fought the hinge limit when driven past it).
 
-Environment bug found here: the hinged lids had no latch and tipped open by themselves within about 30 s with the arm idle.
-Each lid now has a closed-position detent (weld latch that releases at about 0.4 N at the tab and re-latches when pushed
-shut after being opened), and the hinge is lighter so a released lid swings fully open. The pi0.5 baseline ran before this.
+Environment changes: the hinged lids had no latch and tipped open by themselves within about 30 s with the arm idle. Each lid
+now has a closed-position detent (weld latch that releases at about 0.4 N at the tab and re-latches when pushed shut after
+being opened), a light hinge, and a stop at 83 degrees. The holders are 50 mm apart (were 34 mm): the Panda hand body
+is 6 cm wide and caught the neighbours. The pi0.5 baseline ran before these changes.
