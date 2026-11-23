@@ -25,6 +25,7 @@ CRADLE_TOP = ZB + 0.006
 SEAT_Z = CRADLE_TOP + 0.019  # fuse centre height when seated
 FUSE_HALF = 0.019
 RELEASE_N = 6.0
+LID_RELEASE_NM = 0.02  # torque about the hinge that frees a closed lid (~0.4 N at the tab); latches when pushed shut
 N_NEW = 2
 
 
@@ -98,8 +99,8 @@ class FuseHolder(TaskEnv):
                 type=mujoco.mjtJoint.mjJNT_HINGE,
                 axis=(0, -1, 0),
                 range=(0, 1.75),
-                damping=0.002,
-                frictionloss=0.004,
+                damping=0.004,
+                frictionloss=0.0005,  # light hinge: once the detent lets go, the lid swings fully open under its weight
             )
             box(lid, f"lid{i}_plate", (0, 0, 0.04), (0.002, 0.0078, 0.04), "orange", density=700)
             box(lid, f"lid{i}_tab", (-0.0085, 0, 0.0775), (0.0085, 0.007, 0.0015), "orange", density=700)
@@ -114,6 +115,8 @@ class FuseHolder(TaskEnv):
                 quat=np.array([0.7071, 0.7071, 0, 0]),
                 visual=True,
             )
+        for i in range(4):  # closed-position detent: without it the lids tip over by themselves within ~30 s
+            latch.add_weld(spec, f"lid{i}_latch", f"lid{i}")
         # fuses: 0 = blown, 1..3 = good (seated), then N_NEW fresh in the caddy
         self.fuse_names = ["fuse_blown"] + [f"fuse_good{k}" for k in range(3)] + [f"fuse_new{k}" for k in range(N_NEW)]
         for n in self.fuse_names:
@@ -152,6 +155,10 @@ class FuseHolder(TaskEnv):
         self.fuse_dof = {n: m.jnt_dofadr[m.joint(f"{n}_free").id] for n in self.fuse_names}
         self.latched_at = dict.fromkeys(self.fuse_names, -1.0)
         self.lid_q = [m.jnt_qposadr[m.joint(f"lid{i}_hinge").id] for i in range(4)]
+        self.lid_dof = [m.jnt_dofadr[m.joint(f"lid{i}_hinge").id] for i in range(4)]
+        self.lid_bid = [m.body(f"lid{i}").id for i in range(4)]
+        self.lid_eq = [m.equality(f"lid{i}_latch").id for i in range(4)]
+        self.lid_armed = [False] * 4
         self.seat = np.array([[FUSE_X, y, SEAT_Z] for y in YS])
         self.armed = dict.fromkeys(self.fuse_names, True)
         self.target = 0
@@ -178,8 +185,14 @@ class FuseHolder(TaskEnv):
         self.holder_of = dict.fromkeys(self.fuse_names)
         for n in self.fuse_names:
             d.eq_active[self.fuse_eq[n]] = 0
+        for eq in self.lid_eq:
+            d.eq_active[eq] = 0
+        self.lid_armed = [False] * 4
 
     def after_settle(self):
+        for i in range(4):  # lids start closed and latched
+            self.d.qpos[self.lid_q[i]] = 0.0
+            latch.engage(self.m, self.d, self.lid_eq[i], self.lid_bid[i])
         for i, n in self.holder_fuse.items():  # factory-installed fuses are clipped in
             latch.engage(self.m, self.d, self.fuse_eq[n], self.fuse_bid[n])
             self.holder_of[n] = i
@@ -188,6 +201,20 @@ class FuseHolder(TaskEnv):
     # ---------------------------------------------------------------- latch logic
     def on_substep(self):
         d, m = self.d, self.m
+        for i in range(4):  # lid detents: pull the tab to open, push it shut to latch
+            eq = self.lid_eq[i]
+            if d.eq_active[eq]:
+                sel = (d.efc_type == mujoco.mjtConstraint.mjCNSTR_EQUALITY) & (d.efc_id == eq)
+                # the hinge carries the force; the weld carries the torque about it
+                if sel.any() and np.linalg.norm(d.efc_force[sel][3:6]) > LID_RELEASE_NM:
+                    latch.release(d, eq)
+            else:
+                ang = d.qpos[self.lid_q[i]]
+                if ang > 0.3:
+                    self.lid_armed[i] = True  # it has really been opened: it may latch again when pushed shut
+                elif self.lid_armed[i] and ang < 0.04 and abs(d.qvel[self.lid_dof[i]]) < 0.3:
+                    latch.engage(m, d, eq, self.lid_bid[i])
+                    self.lid_armed[i] = False
         for n in self.fuse_names:
             eq, b = self.fuse_eq[n], self.fuse_bid[n]
             if d.eq_active[eq]:

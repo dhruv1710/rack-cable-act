@@ -83,7 +83,7 @@ def fuse_holder():
     )
     # open the lid by pushing the thumb tab toward the robot / down: apply force on lid body
     lid = m.body(f"lid{t}").id
-    push(env, lid, [-0.4, 0, -0.1], 0.8)
+    push(env, lid, [-1.2, 0, -0.1], 0.8)  # a firm pull: the closed lid is held by a detent (~0.4 N at the tab)
     for _ in range(200):
         mujoco.mj_step(m, d)
         env.on_substep()

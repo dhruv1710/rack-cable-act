@@ -305,13 +305,15 @@ def plan_joint_path(drv, poses, n_seeds=24, small=0.5, seed=0, allow_flip=True, 
     rng = np.random.default_rng(seed)
     q_now = drv.joint_state()
     flip = np.diag([-1.0, -1.0, 1.0])  # turn about the tool z axis (approach direction)
-    layers, prev_best = [], q_now
+    layers, prev_sols = [], [q_now]
     for pos, R in poses:
         sols = []
         for Rt in (R, R @ flip) if allow_flip else (R,):
-            q, ok = solve_ik(env.m, env.d, drv.arm, pos, Rt, q_init=prev_best, iters=250)
-            if ok:
-                sols.append(q)
+            # follow every configuration found at the previous waypoint (warm start), then add random seeds
+            for q0 in prev_sols[:10]:
+                q, ok = solve_ik(env.m, env.d, drv.arm, pos, Rt, q_init=q0, iters=250)
+                if ok and all(np.abs(q - o).max() > 0.05 for o in sols):
+                    sols.append(q)
             tries = 0
             while tries < 3 * n_seeds and (tries < n_seeds or len(sols) < 4):  # thin regions need many more seeds
                 tries += 1
@@ -322,7 +324,7 @@ def plan_joint_path(drv, poses, n_seeds=24, small=0.5, seed=0, allow_flip=True, 
         if not sols:
             return None, 99, float("inf")
         layers.append(sols)
-        prev_best = min(sols, key=lambda c: np.abs(c - prev_best).max())
+        prev_sols = sols
 
     def cost(a, b_, allowed):
         st = np.abs(a - b_).max()
@@ -351,7 +353,7 @@ def plan_joint_path(drv, poses, n_seeds=24, small=0.5, seed=0, allow_flip=True, 
     return chain, sum(st > small for st in steps), float(max(steps))
 
 
-def run_joint_path(drv, qs, seconds, grip=None, max_speed=1.2):
+def run_joint_path(drv, qs, seconds, grip=None, max_speed=1.2, stop=None):
     """Execute a joint path (list of q) from the current state. Each segment takes its share of `seconds`, but never
     less than the time the largest joint step needs at max_speed (rad/s), so a wrist flip is done slowly."""
     if grip is not None:
@@ -362,6 +364,12 @@ def run_joint_path(drv, qs, seconds, grip=None, max_speed=1.2):
         n = max(1, int(max(base, np.abs(b_ - a).max() / max_speed) * 50))
         for i in range(1, n + 1):
             drv.env.step(drv._act(a + (b_ - a) * (i / n)))
+            if stop is not None and stop():
+                q_hold = drv.joint_state()  # one fixed command: re-reading the pose every step lets the arm sag onward
+                for _ in range(5):
+                    drv.env.step(drv._act(q_hold))
+                return True
+    return False
 
 
 def carry_path(drv, start, goal, R, seconds, n=30, **kw):
@@ -478,7 +486,7 @@ def _exp_rot(w):
     return np.eye(3) + np.sin(ang) * K + (1 - np.cos(ang)) * K @ K
 
 
-def pmove(drv, pos, R, seconds, n=12, big="none"):
+def pmove(drv, pos, R, seconds, n=12, big="none", stop=None):
     """Move the TCP in a straight line to `pos` while turning to `R`, on a planned continuous joint path (see
     plan_joint_path). big: where a large joint step is allowed ("none", "first", "any"). Returns True if it moved."""
     d, arm = drv.env.d, drv.arm
@@ -488,13 +496,13 @@ def pmove(drv, pos, R, seconds, n=12, big="none"):
     qs, _nb, _worst = plan_joint_path(drv, poses, big_steps=big)
     if qs is None:
         return False
-    run_joint_path(drv, qs, seconds)
+    run_joint_path(drv, qs, seconds, stop=stop)
     return True
 
 
-def pmove_safe(drv, pos, R, seconds, n=8):
+def pmove_safe(drv, pos, R, seconds, n=8, stop=None):
     """pmove that tries a continuous path first and only then one with a large first step (used for retreats)."""
-    return pmove(drv, pos, R, seconds, n=n) or pmove(drv, pos, R, seconds, n=n, big="first")
+    return pmove(drv, pos, R, seconds, n=n, stop=stop) or pmove(drv, pos, R, seconds, n=n, big="first", stop=stop)
 
 
 def pmove_via(drv, points, R, seconds, n_per=8, big="first"):
@@ -615,4 +623,206 @@ def pouring_beads(env, verbose=False, tilt_max=2.35, back=0.03, z_over=0.15):
     drv.release(0.6)
     pmove_safe(drv, np.array([c[0], c[1], 0.25]), R0, 1.5, n=8)
     drv.hold(1.0)
+    return env.evaluate()
+
+
+# ------------------------------------------------------------------------------------------------------ fuse holder
+FUSE_YAWS = (0.0, -0.2, 0.2, -0.35, 0.35)  # small hand yaws: the holders are near the arm's plane, where IK is sparse
+
+
+def _fuse_pose(yaw=0.0, roll=np.pi / 2):
+    from .common.arms import forward_rot
+
+    return forward_rot(yaw, roll)  # hand horizontal; roll pi/2: pads closing vertically
+
+
+def fuse_open_lid(env, drv, i, verbose=False):
+    """Open holder i's lid: slide a half-open hand over the tab (lower pad under it, upper pad above the ridge), pinch,
+    pull toward the robot a few centimetres (the lid is balanced over its hinge, so gravity finishes the job), release,
+    and back out. Returns the lid angle."""
+    from .tasks.fuse_holder import X_F, YS, ZB
+
+    d = env.d
+    y = YS[i]
+    xl = X_F - 0.002
+    z = ZB + 0.0775 + 0.0015 + 0.004
+    far, pre, at = np.array([xl - 0.15, y, z + 0.06]), np.array([xl - 0.10, y, z]), np.array([xl - 0.0085, y, z])
+    drv.hold(0.1, grip=0.5)  # gap ~16 mm
+    R = None
+    for yaw in FUSE_YAWS:
+        if pmove_via(drv, [far, pre, at], _fuse_pose(yaw), 5.0, n_per=8):
+            R = _fuse_pose(yaw)
+            break
+    if R is None:
+        return float(d.qpos[env.lid_q[i]])
+    drv.hold(0.4)
+    gentle_grasp(drv, seconds=0.8, hold=0.3)
+    for dx in (-0.01, -0.02, -0.03):
+        pmove_safe(drv, at + [dx, 0, 0], R, 0.8, n=4)
+        drv.hold(0.2)
+    drv.hold(0.5, grip=0.5)
+    pmove_safe(drv, at + [-0.09, 0, 0.0], R, 1.2, n=6)
+    drv.hold(5.0)
+    if verbose:
+        print(f"  lid {i}: angle {d.qpos[env.lid_q[i]]:.2f}")
+    return float(d.qpos[env.lid_q[i]])
+
+
+def fuse_pull_to_bin(env, drv, i, name, verbose=False):
+    """Grip fuse `name` in holder i above the cradle walls (hand horizontal, pads closing sideways), lift it out of the
+    spring clip, carry it to the scrap bin and drop it. The lid must already be open."""
+    from .tasks.fuse_holder import FUSE_X, SEAT_Z, YS
+
+    d = env.d
+    y = YS[i]
+    z = SEAT_Z + 0.011  # upper part of the fuse, above the 15 mm cradle walls
+    far, pre, at = np.array([0.50, y, z + 0.05]), np.array([0.58, y, z]), np.array([FUSE_X, y, z])
+    drv.hold(0.1, grip=0.55)  # gap ~19 mm for a 10 mm fuse
+    R = None
+    for yaw in FUSE_YAWS:
+        if pmove_via(drv, [far, pre, at], _fuse_pose(yaw, 0.0), 5.0, n_per=8):
+            R = _fuse_pose(yaw, 0.0)
+            break
+    if R is None:
+        return False
+    drv.hold(0.4)
+    gentle_grasp(drv, seconds=0.8, hold=0.4)
+    pmove_safe(drv, at + [0, 0, 0.035], R, 1.5, n=6)
+    drv.hold(0.3)
+    if verbose:
+        q = d.xpos[env.fuse_bid[name]]
+        print(f"  fuse {name}: z {q[2]:.3f} (seat {SEAT_Z:.3f}), holder {env.holder_of.get(name)}")
+    pmove_safe(drv, np.array([0.55, y, z + 0.05]), R, 1.5, n=8)
+    bin_xy = np.array([0.50, 0.22])
+    pmove_safe(drv, np.array([bin_xy[0], bin_xy[1], 0.17]), R, 3.0, n=14)
+    drv.hold(0.3)
+    drv.release(0.6)
+    drv.hold(1.0)
+    return True
+
+
+def fuse_seat_new(env, drv, i, name, verbose=False, tilt=0.5):
+    """Pick fresh fuse `name` from the foam caddy (vertical hand, pads closing sideways) and lower it into holder i's
+    open cradle; it latches when it is within 3 mm of the seat, upright and slow."""
+    from .tasks.fuse_holder import FUSE_X, SEAT_Z, YS
+
+    d = env.d
+    p = d.xpos[env.fuse_bid[name]].copy()
+    R = down_rot(0.0)
+    pmove(drv, np.array([p[0], p[1], 0.17]), R, 3.0, n=12, big="first")
+    drv.hold(0.3, grip=1.0)
+    pmove(drv, np.array([p[0], p[1], p[2] + 0.01]), R, 1.5, n=8)
+    drv.hold(0.3)
+    gentle_grasp(drv, seconds=0.8, hold=0.4)
+    held_dz = d.xpos[env.fuse_bid[name]][2] - drv.arm.tcp_pos(d)[2]  # fuse centre relative to the pads
+    pmove(drv, np.array([p[0], p[1], 0.17]), R, 1.2, n=8)
+    y = YS[i]
+    # the wrist is 6 cm wide and would hit the mounting plate behind the holders: lean the hand (fingers toward the
+    # plate, wrist toward the robot). The fuse hangs from the pads and stays upright.
+    c, sn = np.cos(tilt), np.sin(tilt)
+    R = np.array([[c, 0, -sn], [0, 1, 0], [sn, 0, c]]) @ R
+    top = np.array([FUSE_X, y, 0.27])
+    pmove_safe(drv, top, R, 3.0, n=14)
+    drv.hold(0.4)
+    # centre the fuse (not the hand) over the seat, then lower in steps
+    z_seat_tcp = SEAT_Z - held_dz
+    z_sched = [
+        *np.linspace(0.27, z_seat_tcp + 0.012, 10)[1:],
+        *np.arange(z_seat_tcp + 0.010, z_seat_tcp - 0.0035, -0.001),
+    ]
+    for zz in z_sched:  # coarse, then 1 mm steps so it stops as soon as the clip latches
+        off_xy = d.xpos[env.fuse_bid[name]][:2] - drv.arm.tcp_pos(d)[:2]  # fuse relative to the pads, measured
+        tcp = np.array([FUSE_X - off_xy[0], y - off_xy[1], zz])
+        ok = pmove_safe(
+            drv, tcp, R, 0.8 if zz > z_seat_tcp + 0.012 else 0.3, n=4 if zz > z_seat_tcp + 0.012 else 2,
+            stop=lambda: env.holder_of.get(name) == i,
+        )
+        if env.holder_of.get(name) != i:
+            drv.hold(0.15)
+        if env.holder_of.get(name) == i:
+            drv.release(0.4)  # latched: let go at once (more than ~6 N on the clip frees it again)
+            break
+        if verbose:
+            q = d.xpos[env.fuse_bid[name]]
+            print(f"    z {zz:.3f}: ok {ok} fuse xy err {np.round((q[:2] - [FUSE_X, y]) * 1000, 1)} mm z {q[2]:.3f}")
+            pairs = {
+                (env.m.body(env.m.geom_bodyid[c.geom1]).name, env.m.body(env.m.geom_bodyid[c.geom2]).name)
+                for c in d.contact[: d.ncon]
+            }
+            print("      contacts:", sorted(p_ for p_ in pairs if any("panda" in n_ for n_ in p_))[:6],
+                  "fuse axis z", round(float(d.xmat[env.fuse_bid[name]].reshape(3, 3)[2, 2]), 3))
+    drv.hold(0.5)
+    if verbose:
+        q = d.xpos[env.fuse_bid[name]]
+        seat = np.round([FUSE_X, y, SEAT_Z], 4)
+        print(f"  lowered: fuse {np.round(q, 4)} seat {seat} latched {env.holder_of.get(name)}")
+    drv.release(0.6)
+    drv.hold(0.8)
+    pmove_safe(drv, np.array([FUSE_X, y, 0.27]), R, 1.5, n=6)
+    drv.hold(0.5)
+    return env.holder_of.get(name) == i
+
+
+def fuse_close_lid(env, drv, i, verbose=False):
+    """EXPERIMENTAL: does not close the lid reliably (see docs/envs.md).
+
+    Idea: closed fingertips under the hanging lid, following the arc about its hinge upward until the lid reaches its
+    stop, where the detent latches it. The lid gets pushed to about 0.4 rad, then falls back."""
+    from .tasks.fuse_holder import X_F, YS, ZB
+
+    d = env.d
+    y, R = YS[i], _fuse_pose(0.0, np.pi / 2)
+    hx, hz, off = X_F - 0.002, ZB, 0.006
+
+    def pad_at(theta):  # fingertip position under the lid's underside at hinge angle theta
+        # contact radius from the hinge: out near the end while the lid hangs, down to 5 cm as it closes (the hand must
+        # stay under the neighbouring lids' tabs, which start at z = 0.206)
+        r_push = 0.052 + 0.020 * np.clip(theta / 0.9, 0.0, 1.0)
+        p = np.array([hx - r_push * np.sin(theta), hz + r_push * np.cos(theta)])
+        n = np.array([-np.cos(theta), -np.sin(theta)])  # outward normal of the lid's front face
+        return p + off * n
+
+    thetas = np.linspace(float(d.qpos[env.lid_q[i]]), 0.0, 14)  # from where the lid actually hangs
+    arc = [pad_at(th) for th in thetas]
+    route = [np.array([arc[0][0] - 0.12, y, arc[0][1] - 0.01])] + [np.array([q[0], y, q[1]]) for q in arc]
+    drv.hold(0.1, grip=1.0)
+    # back out first, straight up then toward the robot with the hand as it is: swinging it around in place would drag
+    # the pads through the fuse that was just seated
+    R_now = d.site_xmat[drv.arm.tcp].reshape(3, 3).copy()
+    here = drv.arm.tcp_pos(d)
+    pmove_safe(drv, here + np.array([0.0, 0.0, max(0.0, 0.31 - here[2])]), R_now, 1.5, n=6)
+    pmove_safe(drv, np.array([0.50, y, max(here[2], 0.31)]), R_now, 2.0, n=8)
+    drv.hold(0.1, grip=0.0)
+    R = None
+    for yaw in FUSE_YAWS:  # one planned chain for the whole route: single steps here often have no continuation
+        if pmove_via(drv, route, _fuse_pose(yaw, np.pi / 2), 24.0, n_per=4):
+            R = _fuse_pose(yaw, np.pi / 2)
+            break
+    if verbose:
+        print(f"  close lid: planned {R is not None}, lid angle now {d.qpos[env.lid_q[i]]:.2f}")
+    if R is None:
+        return float(d.qpos[env.lid_q[i]])
+    # the pad is a thick block: finish with a firm horizontal push at the lid's front face, up to the stop
+    for xp, zp in ((0.62, 0.183), (0.628, 0.184), (0.634, 0.185)):
+        pmove_safe(drv, np.array([xp, y, zp]), R, 1.5, n=4)
+        if d.eq_active[env.lid_eq[i]]:
+            break
+    drv.hold(1.0)
+    pmove_safe(drv, np.array([hx - 0.12, y, hz + 0.10]), R, 1.5, n=8)
+    drv.hold(1.5)
+    return float(d.qpos[env.lid_q[i]])
+
+
+def fuse_holder(env, verbose=False):
+    """Replace the blown fuse: open the lid, pull the old fuse into the scrap bin, seat a fresh fuse. The last step of
+    the task, closing the lid, is not solved: fuse_close_lid does not close it, so this does not succeed."""
+    from .common.arms import forward_rot  # noqa: F401
+
+    drv = Driver(env)
+    t = env.target
+    old = env.holder_fuse[t]
+    fuse_open_lid(env, drv, t, verbose=verbose)
+    fuse_pull_to_bin(env, drv, t, old, verbose=verbose)
+    fuse_seat_new(env, drv, t, "fuse_new0", tilt=0.12, verbose=verbose)
+    fuse_close_lid(env, drv, t, verbose=verbose)
     return env.evaluate()

@@ -178,7 +178,8 @@ and writes an mp4 per successful episode to `out/scripted/`.
 | bottle_binning | 8 / 12 | misses are one bottle short |
 | relative_placement | 8 / 12 | `tests/pick_place.py`; misses are mostly the bowl and the tall box. A rewrite on planned paths scored 6 / 12 and was dropped |
 | pouring_beads | 5 / 8 | `experts.pouring_beads`; beads always reach the bowl, the misses are the cup return |
-| others | none | cable_routing, fuse_holder, drive_replacement (cable routing attempted, see below) |
+| fuse_holder | 0 / 8 | partial, see below |
+| others | none | cable_routing (attempted, see below), drive_replacement |
 
 Findings from writing them:
 
@@ -229,3 +230,18 @@ Cable routing, attempted and not solved:
   channels, so it has to go over them. Routing needs the cable pulled taut after it is threaded, which was not found.
 
 The pi0.5 baseline ran before these changes, on the earlier layouts.
+
+Fuse holder, partial (`experts.fuse_holder`, over 8 seeds): the lid opens 8 / 8, the blown fuse is pulled out and put in the
+scrap bin 8 / 8, the fresh fuse seats and latches 6 / 8. It never completes the task:
+
+- Closing the lid is not solved. Closed fingertips follow the lid's arc upward and push it to about 0.4 rad, then it falls
+  back before reaching the stop; the hand body catches the neighbouring lids' tabs before the last push.
+- Seating the fresh fuse needs a vertical hand tilted about 7 degrees (the wrist would hit the mounting plate behind the
+  holders), and its 20 cm palm brushes the neighbouring holders: their fuses are left latched in 0 / 8 runs.
+- How it works: the lid is opened by pinching its tab with a half-open horizontal hand (pad gap about 16 mm) and pulling
+  toward the robot; the blown fuse is gripped above the 15 mm cradle walls and lifted out; the fresh fuse is lowered in
+  1 mm steps and the gripper opens the moment the clip latches (more than 6 N on the clip frees it again).
+
+Environment bug found here: the hinged lids had no latch and tipped open by themselves within about 30 s with the arm idle.
+Each lid now has a closed-position detent (weld latch that releases at about 0.4 N at the tab and re-latches when pushed
+shut after being opened), and the hinge is lighter so a released lid swings fully open. The pi0.5 baseline ran before this.
